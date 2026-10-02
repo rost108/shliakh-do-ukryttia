@@ -306,7 +306,8 @@ const stage = $('stage'), glWrap = $('gl'), mini = $('mini'), mctx = mini.getCon
 const RM = matchMedia('(prefers-reduced-motion: reduce)');
 const KEY = 'hh-shelter-maze-3d-v1';
 const C = 10, WALL_H = 3.4, WALL_T = 1.0;   // метри: 1 квартал = 10 м
-const SPEED = 6;                             // кварталів за секунду
+const SPEED = 5;                             // кварталів за секунду
+const DOOR = 4.64;                           // м від центру укриття до порога (половина 8,28 м + крок)
 const D2R = Math.PI/180;
 
 const DIRS = { N:{b:1,dx:0,dy:-1,o:4}, E:{b:2,dx:1,dy:0,o:8}, S:{b:4,dx:0,dy:1,o:1}, W:{b:8,dx:-1,dy:0,o:2} };
@@ -590,16 +591,84 @@ const house = new THREE.Group();
   scene.add(house);
 }
 
-// гравець: людина в жовтому, з тривожним рюкзаком за спиною
-const FIG = 1.45;   // фігура трохи більша за реальну — щоб читалася з висоти
-const player = new THREE.Group(), figure = new THREE.Group();
+// гравець: людинка з суглобами — жовта куртка зі світловідбивною смугою, темні штани, кепка, тривожний рюкзак
+const FIG = 1.75;   // трохи більша за реальну (≈3,4 м) — щоб читалася з висоти камери
+const HM = {
+  skin: new THREE.MeshStandardMaterial({ color: '#E6C9A8', roughness: .7 }),
+  pants: new THREE.MeshStandardMaterial({ color: '#3A4245', roughness: .8 }),
+  shoe: new THREE.MeshStandardMaterial({ color: '#1C1F21', roughness: .6 }),
+  strip: new THREE.MeshStandardMaterial({ color: '#E9EEF0', roughness: .3, emissive: '#ffffff', emissiveIntensity: .2 }),
+};
+const player = new THREE.Group(), figure = new THREE.Group(), rig = {};
 {
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 1.0, 4, 14), M.body); body.position.y = 0.95;
-  const hd = new THREE.Mesh(new THREE.SphereGeometry(0.33, 18, 14), M.head); hd.position.y = 2.15;
-  const pk = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.72, 0.34), M.pack); pk.position.set(0, 1.2, -0.52);
-  for (const o of [body, hd, pk]){ o.castShadow = true; figure.add(o); }
+  const part = (geo, mat, parent, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
+  const joint = (parent, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
+  const limb = (parent, r, len, mat) => part(new THREE.CapsuleGeometry(r, len, 4, 10), mat, parent, 0, -(len/2 + r*0.4));   // звисає від шарніра
+
+  const body = rig.body = joint(figure, 0, 0, 0);
+  const hips = rig.hips = joint(body, 0, 0.98, 0);
+  part(new THREE.CapsuleGeometry(0.15, 0.16, 4, 10).rotateZ(Math.PI/2), HM.pants, hips);
+  for (const s of [-1, 1]){
+    const hip = joint(hips, 0.11*s, -0.02, 0);
+    limb(hip, 0.085, 0.3, HM.pants);
+    const knee = joint(hip, 0, -0.46, 0);
+    limb(knee, 0.075, 0.3, HM.pants);
+    part(new THREE.BoxGeometry(0.13, 0.08, 0.27), HM.shoe, knee, 0, -0.47, 0.05);
+    rig[s < 0 ? 'hipL' : 'hipR'] = hip; rig[s < 0 ? 'kneeL' : 'kneeR'] = knee;
+  }
+  const spine = rig.spine = joint(hips, 0, 0.06, 0);
+  part(new THREE.CapsuleGeometry(0.19, 0.32, 4, 12), M.body, spine, 0, 0.3).scale.set(1.15, 1, 0.8);
+  const strip = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.045, 18, 1, true), HM.strip);
+  strip.scale.set(1.17, 1, 0.83); strip.position.y = 0.2; spine.add(strip);
+  for (const s of [-1, 1]){
+    const sh = joint(spine, 0.27*s, 0.5, 0);
+    limb(sh, 0.07, 0.2, M.body);
+    const el = joint(sh, 0, -0.32, 0);
+    limb(el, 0.06, 0.18, M.body);
+    part(new THREE.SphereGeometry(0.065, 10, 8), HM.skin, el, 0, -0.33);
+    rig[s < 0 ? 'shL' : 'shR'] = sh; rig[s < 0 ? 'elL' : 'elR'] = el;
+  }
+  const neck = rig.neck = joint(spine, 0, 0.64, 0);
+  part(new THREE.SphereGeometry(0.15, 18, 14), HM.skin, neck, 0, 0.14);
+  part(new THREE.SphereGeometry(0.158, 18, 10, 0, Math.PI*2, 0, Math.PI/2), M.pack, neck, 0, 0.16);
+  part(new THREE.BoxGeometry(0.2, 0.025, 0.13), M.pack, neck, 0, 0.17, 0.15);           // козирок дивиться вперед
+  part(new THREE.BoxGeometry(0.36, 0.44, 0.18), M.pack, spine, 0, 0.32, -0.22);         // тривожний рюкзак
+  part(new THREE.BoxGeometry(0.22, 0.05, 0.012), M.body, spine, 0, 0.42, -0.316);
   figure.scale.setScalar(FIG);
 }
+
+// анімація: біг (мах ногами й руками, коліна, нахил і підскок) ↔ спокій (дихання, перенесення ваги, погляд)
+const anim = { phase: 0, move: 0, hopAt: -1e9 };
+function animatePerson(dt, now){
+  const fin = G.finished ? (now - G.winAt)/1000 : -1;
+  const running = (G.moving && !G.finished) || (fin > 0.8);
+  anim.move += ((running ? 1 : 0) - anim.move)*(1 - Math.exp(-dt*10));
+  const m = RM.matches ? 0 : anim.move, idle = 1 - m, t = now/1000;
+  if (!RM.matches) anim.phase += dt*Math.PI*2*(1.1 + 1.6*m);
+  const p = anim.phase, s = Math.sin(p);
+  rig.hipL.rotation.x = -s*0.85*m;
+  rig.hipR.rotation.x =  s*0.85*m;
+  rig.kneeL.rotation.x = 0.04 + m*(0.15 + 1.1*Math.max(0, Math.cos(p - 5.3)));
+  rig.kneeR.rotation.x = 0.04 + m*(0.15 + 1.1*Math.max(0, Math.cos(p + Math.PI - 5.3)));
+  const sway = RM.matches ? 0 : idle*0.03*Math.sin(t*1.7);
+  rig.shL.rotation.set( s*0.75*m + sway, 0, -0.1 - 0.04*idle);
+  rig.shR.rotation.set(-s*0.75*m - sway, 0,  0.1 + 0.04*idle);
+  rig.elL.rotation.x = rig.elR.rotation.x = -(0.18 + 1.2*m);
+  let bodyY = m*Math.abs(Math.cos(p))*0.09, lean = 0.22*m;
+  const ht = (now - anim.hopAt)/350;
+  if (ht >= 0 && ht < 1) bodyY += Math.sin(ht*Math.PI)*0.35;                       // підскок, коли взяв річ
+  if (G.bump) lean -= Math.sin(G.bump.t*Math.PI)*0.4;                               // відсахнувся від стіни
+  rig.body.position.y = bodyY;
+  rig.hips.position.x = RM.matches ? 0 : idle*0.015*Math.sin(t*0.9);
+  rig.hips.rotation.y = -s*0.1*m;
+  rig.spine.rotation.set(lean, s*0.28*m, 0);
+  rig.spine.scale.y = 1 + (RM.matches ? 0 : idle*0.012*Math.sin(t*2.2));
+  rig.neck.rotation.set(-0.12*m, -s*0.2*m + (RM.matches ? 0 : idle*0.3*Math.sin(t*0.55)), 0);
+  if (fin >= 0 && fin < 0.8 && !RM.matches){                                        // на порозі махає рукою
+    rig.shR.rotation.set(0, 0, 2.7 + 0.28*Math.sin(t*13)); rig.elR.rotation.x = -0.25;
+  }
+}
+
 const ring = new THREE.Group();
 ring.add(new THREE.Mesh(new THREE.CircleGeometry(2.3, 44).rotateX(-Math.PI/2), M.disc), new THREE.Mesh(new THREE.RingGeometry(2.05, 2.45, 44).rotateX(-Math.PI/2), M.ring));
 ring.position.y = 0.06;
@@ -746,7 +815,7 @@ function arrive(c){
   if (c !== G.cell){ addTrail(G.cell, c); G.walked++; }
   G.cell = c; reveal(c);
   if (G.items.has(c)){
-    const k = G.items.get(c); G.items.delete(c); G.got.push(k);
+    const k = G.items.get(c); G.items.delete(c); G.got.push(k); anim.hopAt = performance.now();
     const mesh = G.itemMeshes.get(c); if (mesh) G.pops.push({ mesh, t: 0 });
     if (k === 'light'){ G.hasLight = true; reveal(c); applyLights(); }
     renderKit();
@@ -760,8 +829,10 @@ function update(dt, now){
   if (G.bump){ G.bump.t += dt/0.16; if (G.bump.t >= 1) G.bump = null; }
   if (G.moving){
     G.seg.t += dt*SPEED;
-    while (G.moving && G.seg.t >= 1){
+    // до укриття людинка добігає лише до порога, далі заходить сама
+    while (G.moving && G.seg.t >= (G.seg.to === G.maze.exit ? 1 - DOOR/C : 1)){
       const over = G.seg.t - 1, reached = G.seg.to;
+      if (reached === G.maze.exit){ const a = wpos(G.seg.from), b = wpos(reached), k = 1 - DOOR/C; G.winPos = { x: a.x + (b.x - a.x)*k, z: a.z + (b.z - a.z)*k }; }
       arrive(reached);
       if (G.finished){ G.moving = false; G.seg = null; break; }
       if (G.path.length){ G.seg = { from: reached, to: G.path.shift(), t: over }; }
@@ -781,6 +852,10 @@ function resume(){ if (G && G.pausedAt){ G.t0 += performance.now() - G.pausedAt;
 
 function playerXZ(){
   let p;
+  if (G.finished && G.winPos){
+    const e = wpos(G.maze.exit), k = clamp(((performance.now() - G.winAt)/1000 - 0.8)/0.7, 0, 1);
+    return { x: G.winPos.x + (e.x - G.winPos.x)*0.6*k, z: G.winPos.z + (e.z - G.winPos.z)*0.6*k };
+  }
   if (G.moving && G.seg){
     const a = wpos(G.seg.from), b = wpos(G.seg.to), t = clamp(G.seg.t, 0, 1);
     p = { x: a.x + (b.x - a.x)*t, z: a.z + (b.z - a.z)*t };
@@ -852,8 +927,12 @@ function step(now){
   player.position.set(P.x, 0, P.z);
   if (G.moving && G.seg){ const a = wpos(G.seg.from), b = wpos(G.seg.to); G.face = Math.atan2(b.x - a.x, b.z - a.z); }
   figure.rotation.y = lerpAngle(figure.rotation.y, G.face, 1 - Math.exp(-dt*14));
-  figure.position.y = (G.moving && !RM.matches) ? Math.abs(Math.sin(now/1000*13))*0.16 : figure.position.y*0.8;
-  if (G.finished){ const s = Math.max(0, 1 - (now - G.winAt)/450); figure.scale.setScalar(FIG*s); ring.visible = false; }
+  animatePerson(dt, now);
+  if (G.finished){
+    // помахав на порозі (0,8 с) → заходить усередину (0,7 с) і зникає за дверима
+    const k = RM.matches ? 1 : clamp(((now - G.winAt)/1000 - 0.8)/0.7, 0, 1);
+    figure.scale.setScalar(FIG*(k < 0.7 ? 1 : Math.max(0, 1 - (k - 0.7)/0.3))); ring.visible = false;
+  }
   for (const mesh of G.itemMeshes.values()){
     if (!mesh.parent) continue;
     if (!RM.matches){ mesh.rotation.y += dt*1.1; mesh.position.y = 1.8 + Math.sin(now/520 + mesh.userData.phase)*0.25; }
@@ -996,13 +1075,14 @@ function win(){
   const f = FACTS[(G.level - 1) % FACTS.length];
   $('wFact').textContent = f[0]; $('wMeaning').textContent = f[1];
   hideToast();
-  setTimeout(() => { if (G.finished) setCamMode('orbit'); }, RM.matches ? 0 : 350);
+  if (G.winPos){ const e = wpos(G.maze.exit); G.face = Math.atan2(e.x - G.winPos.x, e.z - G.winPos.z); }
+  setTimeout(() => { if (G.finished) setCamMode('orbit'); }, RM.matches ? 0 : 300);
   setTimeout(() => {
     if (!G.finished) return;
     screen = 'win'; $('win').hidden = false; fitOrbit();
     $('win').querySelector('.card').scrollTop = 0;
     $('nextBtn').focus({ preventScroll: true });
-  }, RM.matches ? 150 : 1100);
+  }, RM.matches ? 150 : 1500);
 }
 function applyPad(){
   $('pad').hidden = !saved.pad; stage.classList.toggle('with-pad', !!saved.pad);
