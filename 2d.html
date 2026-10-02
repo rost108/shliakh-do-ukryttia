@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="description" content="Гра-тренування Hobbit House: пройди кварталами від дому до укриття, збери тривожну валізку і вкладися в норматив.">
+<meta name="theme-color" content="#EFEDE8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1011" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Шлях до укриття">
+<meta property="og:title" content="Шлях до укриття — Hobbit House">
+<meta property="og:description" content="Гра-тренування Hobbit House: пройди кварталами від дому до укриття, збери тривожну валізку і вкладися в норматив.">
+<meta property="og:image" content="icon-512.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+/* поза артефактом відступи під виріз і жести робить сама сторінка */
+html{background:var(--bg);overscroll-behavior:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+</style>
+<script>window.HH_ALT = {"href": "./", "text": "3D-версія гри"};</script>
+<title>Шлях до укриття 2D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap">
+<style>
+/* Layout: one-screen phone column. HUD strip → maze drawn as an engineering plan on graph paper → status bar; sheets rise over the plan. */
+:root{
+  --bg:#EFEDE8; --paper:#F6F5F2; --sheet:#F6F5F2; --tint:#ECE9E2;
+  --ink:#16181A; --muted:#5A6467; --steel:#84969A; --line:#CFCBC1;
+  --accent:#FCDE00; --accent-press:#E9CC00; --on-accent:#16181A;
+  --wall:#16181A; --grid:rgba(80,94,97,.11); --trail:#84969A; --fog:#1A1D1F; --player:#16181A;
+  --scrim:rgba(16,18,19,.30); --lockup-label:#5A6467;
+  --f-display:"Oswald","Arial Narrow","Roboto Condensed",sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1011; --paper:#15181A; --sheet:#1B1E20; --tint:#23272A;
+    --ink:#EFEDE8; --muted:#9AA6A9; --steel:#84969A; --line:#2E3336;
+    --accent:#FCDE00; --accent-press:#E9CC00; --on-accent:#16181A;
+    --wall:#D8D4CA; --grid:rgba(132,150,154,.10); --trail:#84969A; --fog:#060707; --player:#EFEDE8;
+    --scrim:rgba(0,0,0,.5); --lockup-label:#FCDE00; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1011; --paper:#15181A; --sheet:#1B1E20; --tint:#23272A;
+  --ink:#EFEDE8; --muted:#9AA6A9; --steel:#84969A; --line:#2E3336;
+  --accent:#FCDE00; --accent-press:#E9CC00; --on-accent:#16181A;
+  --wall:#D8D4CA; --grid:rgba(132,150,154,.10); --trail:#84969A; --fog:#060707; --player:#EFEDE8;
+  --scrim:rgba(0,0,0,.5); --lockup-label:#FCDE00; color-scheme:dark;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;overflow:hidden;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+[hidden]{display:none!important}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+.app{position:relative;height:100%;max-width:560px;margin-inline:auto;padding-inline:16px;display:flex;flex-direction:column}
+
+/* HUD */
+.hud{display:flex;align-items:center;gap:14px;padding-block:10px 8px}
+.hud .mark{width:36px;height:26px;flex:none}
+.stat{display:flex;flex-direction:column;gap:3px;min-width:0}
+.stat.grow{flex:1}
+.lbl{font-family:var(--f-mono);font-size:10px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.val{font-family:var(--f-display);font-weight:600;font-size:22px;line-height:1;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.pips{display:flex;gap:4px;height:22px;align-items:center}
+.pip{width:14px;height:14px;border:1.5px solid var(--steel);border-radius:3px}
+.pip.on{background:var(--accent);border-color:var(--ink)}
+.icon-btn{width:40px;height:40px;flex:none;display:grid;place-items:center;border:1px solid var(--line);border-radius:10px;background:transparent}
+.icon-btn svg{width:20px;height:20px}
+
+/* Plan */
+.stage{position:relative;flex:1;min-height:0;border:1px solid var(--line);border-radius:12px;background:var(--paper);overflow:hidden;touch-action:none}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.toast{position:absolute;left:50%;top:12px;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);background:var(--ink);color:var(--paper);font-family:var(--f-mono);font-size:12px;line-height:1.4;letter-spacing:.03em;padding:8px 12px;border-radius:8px;pointer-events:none;opacity:0;transition:opacity .25s;text-align:center;text-wrap:balance}
+.toast.show{opacity:1}
+
+/* Status bar */
+.bar{display:flex;align-items:center;gap:12px;padding-block:8px 10px;font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-variant-numeric:tabular-nums}
+.bar b{color:var(--ink);font-weight:500}
+.bar>span{white-space:nowrap}
+.chip.q{width:30px;padding:6px 0;text-align:center}
+.bar .sp{flex:1}
+.chip{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);background:transparent;border:1px solid var(--line);border-radius:999px;padding:6px 11px}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+/* D-pad */
+.pad{display:grid;grid-template-columns:repeat(3,60px);grid-template-rows:repeat(3,48px);gap:6px;justify-content:center;padding-block:2px 12px}
+.pad button{display:grid;place-items:center;border:1px solid var(--line);background:var(--paper);border-radius:10px}
+.pad button:active{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.pad svg{width:22px;height:22px}
+.pad [data-dir="N"]{grid-area:1/2}
+.pad [data-dir="W"]{grid-area:2/1}
+.pad [data-dir="E"]{grid-area:2/3}
+.pad [data-dir="S"]{grid-area:3/2}
+.pad [data-dir="E"] svg{transform:rotate(90deg)}
+.pad [data-dir="S"] svg{transform:rotate(180deg)}
+.pad [data-dir="W"] svg{transform:rotate(-90deg)}
+
+/* Sheets */
+.sheet{position:absolute;inset:0;z-index:10;display:flex;align-items:flex-end;justify-content:center;background:var(--scrim)}
+.card{width:100%;max-height:100%;overflow:auto;background:var(--sheet);color:var(--ink);border-radius:16px 16px 0 0;padding:22px 20px 20px;box-shadow:0 -10px 30px rgba(0,0,0,.16);display:flex;flex-direction:column;gap:16px;animation:rise .34s cubic-bezier(.2,.8,.2,1);-webkit-user-select:text;user-select:text}
+@keyframes rise{from{transform:translateY(28px)}to{transform:none}}
+@media (min-width:600px) and (min-height:640px){
+  .sheet{align-items:center;padding:16px}
+  .card{border-radius:16px;max-width:460px}
+}
+@media (prefers-reduced-motion: reduce){ .card{animation:none} .toast{transition:none} }
+
+.lockup{display:flex;align-items:center;gap:10px}
+.lockup .mark{width:46px;height:33px}
+.lockup .n{font-weight:700;font-size:18px;line-height:1.1}
+.lockup .t{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--lockup-label)}
+h1,h2{font-family:var(--f-display);font-weight:700;text-transform:uppercase;letter-spacing:.02em;line-height:1;margin:0;text-wrap:balance}
+h1{font-size:clamp(36px,11vw,50px)}
+h2{font-size:clamp(30px,9vw,40px)}
+.lead{margin:0;max-width:60ch;font-size:15.5px}
+.rules{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.rules li{display:grid;grid-template-columns:36px 1fr;gap:12px;align-items:start;font-size:14px;color:var(--muted)}
+.rules li b{color:var(--ink);font-weight:600}
+.glyph{width:36px;height:36px;border:1px solid var(--line);border-radius:9px;display:grid;place-items:center;color:var(--ink)}
+.glyph svg{width:22px;height:22px}
+.actions{display:grid;gap:10px}
+.btn{appearance:none;border:0;border-radius:10px;background:var(--accent);color:var(--on-accent);font-family:var(--f-display);font-weight:600;font-size:17px;letter-spacing:.06em;text-transform:uppercase;padding:14px 18px;width:100%}
+.btn:active{background:var(--accent-press)}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn:focus-visible{outline-color:var(--ink)}
+
+.eyebrow{margin:0;font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.head{display:flex;flex-direction:column;gap:8px}
+.arches{display:flex;gap:18px}
+.arches figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:6px}
+.arches svg{width:52px;height:37px}
+.arches svg{fill:none;stroke:var(--line);stroke-width:3.5}
+.arches .on svg{fill:var(--accent);stroke:var(--accent)}
+.arches figcaption{font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.arches .on figcaption{color:var(--ink)}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0}
+.stats>div{border-top:1px solid var(--line);padding-top:8px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.stats dt{font-family:var(--f-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.stats dd{margin:0;font-family:var(--f-display);font-weight:600;font-size:24px;line-height:1;font-variant-numeric:tabular-nums}
+.stats dd.sub{font-family:var(--f-mono);font-weight:400;font-size:11px;line-height:1.35;color:var(--muted);overflow-wrap:anywhere}
+.fact{margin:0;background:var(--tint);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.fact figcaption{font-family:var(--f-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.fact .f{margin:0;font-weight:600;font-size:16px;line-height:1.35}
+.fact .m{margin:0;font-size:14px;color:var(--muted)}
+.site{margin:0;font-family:var(--f-mono);font-size:11px;color:var(--muted);text-align:center}
+.site a{color:var(--ink)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="hh-mark" viewBox="0 0 79 56">
+    <path d="M76.9365 55.7477C91.484 -13.3104 -14.854 -11.8705 1.76966 55.7477H76.9365Z" fill="#FCDE00"/>
+    <path fill-rule="evenodd" clip-rule="evenodd" fill="#84969A" d="M54.0822 28.7406V55.7535H48.2042V32.1389C41.3643 28.8674 34.9836 30.7757 32.6483 32.1389V55.7535H26.7109V0H32.6483V25.8032C43.003 23.269 51.0542 26.2064 54.0822 28.7406ZM59.2461 4.78076C74.5645 24.3636 71.8729 46.4807 68.7457 55.7537L60.4337 55.6962C66.0741 41.9881 62.5908 27.2817 60.0179 21.1382H33.4185L33.3594 13.3051C40.8205 13.3434 55.8024 13.3051 55.8024 13.3051C55.8024 13.3051 53.863 10.3484 53.1899 9.38853L59.2461 4.78076ZM18.1583 55.7537C15.823 49.0726 12.7079 32.7957 18.9303 21.1382H25.9957V13.5355H22.849C23.2646 12.6522 24.3572 10.5865 25.4021 9.38853L19.5834 4.78076C12.8743 12.8251 1.94963 34.0974 10.2024 55.7537H18.1583Z"/>
+  </symbol>
+  <symbol id="dome" viewBox="0 0 79 56">
+    <path d="M76.9365 55.7477C91.484 -13.3104 -14.854 -11.8705 1.76966 55.7477H76.9365Z"/>
+  </symbol>
+</svg>
+
+<div class="app" id="app">
+  <header class="hud">
+    <svg class="mark" aria-label="Hobbit House" role="img"><use href="#hh-mark"/></svg>
+    <div class="stat"><span class="lbl">Рівень</span><span class="val" id="hLevel">01</span></div>
+    <div class="stat grow"><span class="lbl">Час</span><span class="val" id="hTime">0:00.0</span></div>
+    <div class="stat"><span class="lbl">Валізка</span><span class="pips" id="hKit"></span></div>
+    <button class="icon-btn" id="restartBtn" aria-label="Почати рівень заново" title="Почати рівень заново (R)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4.5v4.5H8"/></svg>
+    </button>
+  </header>
+
+  <main class="stage" id="stage">
+    <canvas id="cv" role="img" aria-label="План лабіринту: дім, шлях і укриття"></canvas>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </main>
+
+  <footer class="bar">
+    <span>Шлях <b id="bDist">0 м</b></span>
+    <span>Норматив <b id="bPar">0:00</b></span>
+    <span class="sp"></span>
+    <button class="chip q" id="rulesBtn" aria-label="Правила" title="Правила">?</button>
+    <button class="chip" id="padBtn" aria-pressed="false">Кнопки</button>
+  </footer>
+
+  <div class="pad" id="pad" hidden>
+    <button data-dir="N" aria-label="Вгору"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button>
+    <button data-dir="W" aria-label="Ліворуч"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button>
+    <button data-dir="E" aria-label="Праворуч"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button>
+    <button data-dir="S" aria-label="Вниз"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button>
+  </div>
+
+  <section class="sheet" id="intro" aria-labelledby="introTitle">
+    <div class="card">
+      <div class="lockup">
+        <svg class="mark" aria-hidden="true"><use href="#hh-mark"/></svg>
+        <div><div class="n">Hobbit House</div><div class="t">Гра-тренування</div></div>
+      </div>
+      <h1 id="introTitle">Шлях до укриття</h1>
+      <p class="lead">Коли лунає тривога, дорогу краще знати заздалегідь. Пройди від дому до укриття найкоротшим шляхом і збери дорогою тривожну валізку.</p>
+      <ul class="rules">
+        <li>
+          <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16"/><path d="M8 8l-4 4 4 4"/><path d="M16 8l4 4-4 4"/></svg></span>
+          <span><b>Свайп або дотик збоку від себе</b> ведуть до найближчого повороту. На комп’ютері працюють стрілки.</span>
+        </li>
+        <li>
+          <span class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7" width="17" height="12.5" rx="2"/><path d="M9 7V5h6v2"/><path d="M12 10.5v5.5M9.25 13.25h5.5"/></svg></span>
+          <span><b>Тривожна валізка</b> чекає в тупиках: документи, вода, ліхтарик, аптечка, павербанк.</span>
+        </li>
+        <li>
+          <span class="glyph"><svg viewBox="0 0 79 56" style="width:24px;height:17px"><use href="#dome" fill="#FCDE00"/></svg></span>
+          <span><b>Три арки з трьох</b> за укриття, норматив часу і повну валізку.</span>
+        </li>
+      </ul>
+      <div class="actions">
+        <button class="btn" id="startBtn">Почати</button>
+        <button class="btn ghost" id="fromOneBtn" hidden>З першого рівня</button>
+      </div>
+      <p class="site" id="altLink" hidden></p>
+    </div>
+  </section>
+
+  <section class="sheet" id="win" aria-labelledby="winTitle" hidden>
+    <div class="card">
+      <div class="head">
+        <p class="eyebrow" id="wEyebrow">Рівень 01</p>
+        <h2 id="winTitle">Ти в укритті</h2>
+      </div>
+      <div class="arches" id="wArches">
+        <figure><svg viewBox="0 0 79 56" aria-hidden="true"><use href="#dome"/></svg><figcaption>Укриття</figcaption></figure>
+        <figure><svg viewBox="0 0 79 56" aria-hidden="true"><use href="#dome"/></svg><figcaption>Норматив</figcaption></figure>
+        <figure><svg viewBox="0 0 79 56" aria-hidden="true"><use href="#dome"/></svg><figcaption>Валізка</figcaption></figure>
+      </div>
+      <dl class="stats">
+        <div><dt>Час</dt><dd id="wTime">0:00.0</dd><dd class="sub" id="wPar">норматив 0:00</dd></div>
+        <div><dt>Шлях</dt><dd id="wDist">0 м</dd><dd class="sub" id="wBest">найкоротший 0 м</dd></div>
+        <div><dt>Валізка</dt><dd id="wKit">0 / 0</dd><dd class="sub" id="wKitNames">порожня</dd></div>
+      </dl>
+      <figure class="fact">
+        <figcaption>Факт від Hobbit House</figcaption>
+        <p class="f" id="wFact"></p>
+        <p class="m" id="wMeaning"></p>
+      </figure>
+      <div class="actions">
+        <button class="btn" id="nextBtn">Наступний рівень</button>
+        <button class="btn ghost" id="againBtn">Пройти ще раз</button>
+      </div>
+      <p class="site">Більше про укриття: <a href="https://hobbithouse.com.ua" target="_blank" rel="noopener">hobbithouse.com.ua</a></p>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const stage = $('stage'), cv = $('cv'), ctx = cv.getContext('2d');
+const sCv = document.createElement('canvas'), sctx = sCv.getContext('2d');
+const fCv = document.createElement('canvas'), fctx = fCv.getContext('2d');
+const RM = matchMedia('(prefers-reduced-motion: reduce)');
+const KEY = 'hh-shelter-maze-v1';
+const SPEED = 12;          // клітинок за секунду
+const METERS = 10;         // 1 клітинка плану = 10 м
+
+const DIRS = { N:{b:1,dx:0,dy:-1,o:4}, E:{b:2,dx:1,dy:0,o:8}, S:{b:4,dx:0,dy:1,o:1}, W:{b:8,dx:-1,dy:0,o:2} };
+const KEYS = ['N','E','S','W'];
+const BIT = {1:'N',2:'E',4:'S',8:'W'};
+const DEG = [0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4];
+const KIT = { docs:'Документи', water:'Вода', light:'Ліхтарик', aid:'Аптечка', power:'Павербанк' };
+
+// Факти — лише з data/proof_points.md
+const FACTS = [
+  ['Стіни укриття — 300 мм залізобетону за нормами чинного ДБН.', 'Захист спирається на інженерний розрахунок.'],
+  ['Міцність укриття — 500 кПа. Державний стандарт вимагає 100 кПа.', 'Запас міцності у п’ять разів більший за норму.'],
+  ['«Фортеця» витримала підрив міни 120 мм на полігонному випробуванні.', 'Конструкцію перевірили в натурі, а не лише на папері.'],
+  ['Укриття сертифіковані за ДСТУ 9329:2025 як первинні мобільні укриття.', 'Відповідність стандарту підтверджена документом.'],
+  ['Понад 600 реалізованих об’єктів по всій Україні.', 'Рішення вже щодня працює для людей.'],
+  ['70 років виробничої бази залізобетону.', 'Досвід, який накопичують десятиліттями.'],
+  ['Монтаж укриття на об’єкті — від 8 годин.', 'Точний час залежить від моделі й кількості модулів.'],
+  ['Модульна конструкція: місткість від 5 осіб, з кожним модулем більше.', 'Укриття розраховують під кількість людей на об’єкті.'],
+  ['Наземне укриття в мирний час може працювати як кафе, склад чи цех.', 'Споруда корисна щодня, а не лише під час тривоги.'],
+];
+
+const DOME = new Path2D('M76.9365 55.7477C91.484 -13.3104 -14.854 -11.8705 1.76966 55.7477H76.9365Z');
+const MONO = new Path2D('M54.0822 28.7406V55.7535H48.2042V32.1389C41.3643 28.8674 34.9836 30.7757 32.6483 32.1389V55.7535H26.7109V0H32.6483V25.8032C43.003 23.269 51.0542 26.2064 54.0822 28.7406ZM59.2461 4.78076C74.5645 24.3636 71.8729 46.4807 68.7457 55.7537L60.4337 55.6962C66.0741 41.9881 62.5908 27.2817 60.0179 21.1382H33.4185L33.3594 13.3051C40.8205 13.3434 55.8024 13.3051 55.8024 13.3051C55.8024 13.3051 53.863 10.3484 53.1899 9.38853L59.2461 4.78076ZM18.1583 55.7537C15.823 49.0726 12.7079 32.7957 18.9303 21.1382H25.9957V13.5355H22.849C23.2646 12.6522 24.3572 10.5865 25.4021 9.38853L19.5834 4.78076C12.8743 12.8251 1.94963 34.0974 10.2024 55.7537H18.1583Z');
+
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const pad2 = n => String(n).padStart(2, '0');
+const fmt = s => { const t = Math.floor(s*10); return Math.floor(t/600) + ':' + pad2(Math.floor((t%600)/10)) + '.' + (t%10); };
+const fmtPar = s => Math.floor(s/60) + ':' + pad2(s%60);
+
+function rng(seed){
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+function shuffle(arr, R){ for (let i = arr.length - 1; i > 0; i--){ const j = Math.floor(R()*(i+1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
+
+const store = {
+  read(){ try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch(e){ return {}; } },
+  write(v){ try { localStorage.setItem(KEY, JSON.stringify(v)); } catch(e){} }
+};
+const saved = Object.assign({ max:1, best:{}, pad:false }, store.read());
+
+/* ---------- Лабіринт ---------- */
+function bfs(m, sources){
+  const d = new Int32Array(m.n).fill(-1), par = new Int32Array(m.n).fill(-1), q = new Int32Array(m.n);
+  let h = 0, t = 0;
+  for (const s of sources){ if (d[s] < 0){ d[s] = 0; q[t++] = s; } }
+  while (h < t){
+    const c = q[h++], o = m.open[c];
+    for (const k of KEYS){
+      const D = DIRS[k]; if (!(o & D.b)) continue;
+      const nc = c + D.dx + D.dy*m.cols;
+      if (d[nc] < 0){ d[nc] = d[c] + 1; par[nc] = c; q[t++] = nc; }
+    }
+  }
+  return { d, par };
+}
+
+function buildMaze(level, aspect, dark){
+  const short = Math.min(5 + level, 16);
+  let cols, rows;
+  if (aspect >= 1){ cols = short; rows = clamp(Math.round(short*aspect), short, 30); }
+  else { rows = short; cols = clamp(Math.round(short/aspect), short, 30); }
+  const R = rng(level*7919 + 104729);
+  const n = cols*rows, open = new Uint8Array(n), seen = new Uint8Array(n);
+  const m = { cols, rows, n, open };
+
+  // глибинний обхід з поверненням
+  const first = Math.floor(R()*n), stack = [first]; seen[first] = 1;
+  while (stack.length){
+    const c = stack[stack.length-1], x = c % cols, y = (c/cols) | 0, nb = [];
+    for (const k of KEYS){
+      const D = DIRS[k], nx = x + D.dx, ny = y + D.dy;
+      if (nx >= 0 && ny >= 0 && nx < cols && ny < rows && !seen[ny*cols + nx]) nb.push(k);
+    }
+    if (!nb.length){ stack.pop(); continue; }
+    const D = DIRS[nb[Math.floor(R()*nb.length)]], nc = c + D.dx + D.dy*cols;
+    open[c] |= D.b; open[nc] |= D.o; seen[nc] = 1; stack.push(nc);
+  }
+  // кілька обхідних шляхів
+  const loops = Math.round(n*0.05);
+  for (let i = 0; i < loops; i++){
+    const c = Math.floor(R()*n), x = c % cols, y = (c/cols) | 0, D = DIRS[KEYS[Math.floor(R()*4)]];
+    const nx = x + D.dx, ny = y + D.dy;
+    if (nx < 0 || ny < 0 || nx >= cols || ny >= rows || (open[c] & D.b)) continue;
+    open[c] |= D.b; open[ny*cols + nx] |= D.o;
+  }
+
+  const start = (rows-1)*cols;               // дім — лівий нижній кут
+  const A = bfs(m, [start]);
+  let exit = start; for (let i = 0; i < n; i++) if (A.d[i] > A.d[exit]) exit = i;
+  const route = []; for (let c = exit; c !== -1; c = A.par[c]) route.push(c);
+  route.reverse();
+  let stops = 1; for (let i = 1; i < route.length-1; i++) if (DEG[open[route[i]]] !== 2) stops++;
+
+  // тривожна валізка — у тупиках
+  const want = level === 1 ? 1 : level === 2 ? 2 : 3;
+  const dead = [];
+  for (let i = 0; i < n; i++) if (i !== start && i !== exit && DEG[open[i]] === 1 && A.d[i] >= 3) dead.push(i);
+  shuffle(dead, R);
+  const kinds = shuffle(Object.keys(KIT), R);
+  if (dark){ kinds.splice(kinds.indexOf('light'), 1); kinds.unshift('light'); }
+  const items = [];
+  if (dark && dead.length){
+    let bi = 0; for (let j = 1; j < dead.length; j++) if (A.d[dead[j]] < A.d[dead[bi]]) bi = j;
+    items.push([dead.splice(bi, 1)[0], kinds.shift()]);
+  }
+  while (items.length < want && dead.length) items.push([dead.pop(), kinds.shift()]);
+
+  // норматив: шлях + відгалуження до валізки + час на рішення на кожному повороті
+  const B = bfs(m, route);
+  let detour = 0, detourStops = 0;
+  for (const [c] of items){ detour += 2*B.d[c]; detourStops += 2*Math.ceil(B.d[c]/3); }
+  const par = Math.ceil(1.35*(1.5 + (A.d[exit] + detour)/SPEED + (stops + detourStops)*0.75));
+
+  return Object.assign(m, { start, exit, dist:A.d[exit], par, items });
+}
+
+function slidePath(from, k){
+  const m = G.maze; let D = DIRS[k];
+  if (!(m.open[from] & D.b)) return null;
+  const path = []; let c = from, guard = m.n;
+  while (guard--){
+    const nc = c + D.dx + D.dy*m.cols; path.push(nc);
+    if (nc === m.exit || nc === m.start || G.items.has(nc)) break;
+    const o = m.open[nc];
+    if (DEG[o] !== 2) break;                  // перехрестя або тупик
+    D = DIRS[BIT[o & ~D.o]]; c = nc;          // коридор веде далі за поворот
+  }
+  return path;
+}
+
+/* ---------- Стан ---------- */
+let G = null, screen = 'intro';
+let W = 0, H = 0, DPR = 1, cell = 20, ox = 0, oy = 0;
+const T = {};
+
+function readTokens(){
+  const cs = getComputedStyle(document.documentElement);
+  for (const k of ['paper','ink','muted','steel','line','accent','on-accent','wall','grid','trail','fog','player'])
+    T[k] = cs.getPropertyValue('--' + k).trim();
+}
+
+function initLevel(level){
+  const w = stage.clientWidth || 360, h = stage.clientHeight || 560;
+  const dark = level >= 3 && level % 3 === 0;
+  const maze = buildMaze(level, h/w, dark);
+  G = {
+    level, dark, maze, cell: maze.start, trail: [maze.start], items: new Map(maze.items), total: maze.items.length,
+    got: [], hasLight: false, seen: new Uint8Array(maze.n), walked: 0,
+    moving: false, seg: null, path: [], queued: null, bump: null,
+    started: false, t0: 0, elapsed: 0, pausedAt: 0, finished: false, winAt: 0
+  };
+  reveal(maze.start);
+  layout(); paintStatic(); renderHud();
+}
+
+function reveal(c){
+  if (!G.dark) return;
+  const m = G.maze, r = G.hasLight ? 3.2 : 1.9, x0 = c % m.cols, y0 = (c/m.cols) | 0, ri = Math.ceil(r);
+  for (let dy = -ri; dy <= ri; dy++) for (let dx = -ri; dx <= ri; dx++){
+    const x = x0 + dx, y = y0 + dy;
+    if (x < 0 || y < 0 || x >= m.cols || y >= m.rows || dx*dx + dy*dy > r*r) continue;
+    G.seen[y*m.cols + x] = 1;
+  }
+}
+
+/* ---------- Рух ---------- */
+function go(k){
+  if (!G || G.finished || screen !== 'play') return;
+  if (G.moving){
+    const sd = segDir(G.seg);
+    if (DIRS[k].o === DIRS[sd].b){             // розворот посеред коридору
+      G.seg = { from: G.seg.to, to: G.seg.from, t: 1 - G.seg.t }; G.path = []; G.queued = null;
+    } else G.queued = k;
+    return;
+  }
+  const path = slidePath(G.cell, k);
+  if (!path){ if (!RM.matches) G.bump = { k, t: 0 }; return; }
+  if (!G.started){ G.started = true; G.t0 = performance.now(); if (G.level === 1) hideToast(); }
+  G.moving = true; G.seg = { from: G.cell, to: path.shift(), t: 0 }; G.path = path;
+}
+function segDir(s){
+  const c = G.maze.cols, d = s.to - s.from;
+  return d === 1 ? 'E' : d === -1 ? 'W' : d === c ? 'S' : 'N';
+}
+
+function arrive(c){
+  if (c !== G.cell){ G.walked++; G.trail.push(c); }
+  G.cell = c; reveal(c);
+  if (G.items.has(c)){
+    const k = G.items.get(c); G.items.delete(c); G.got.push(k);
+    if (k === 'light'){ G.hasLight = true; reveal(c); }
+    renderKit();
+    toast(KIT[k] + (k === 'light' && G.dark ? ' — огляд ширший' : ' — у валізці') + ' · ' + G.got.length + '/' + G.total, 1600);
+  }
+  $('bDist').textContent = G.walked*METERS + ' м';
+  if (c === G.maze.exit) win();
+}
+
+function update(dt, now){
+  if (!G) return;
+  if (G.bump){ G.bump.t += dt/0.16; if (G.bump.t >= 1) G.bump = null; }
+  if (G.moving){
+    G.seg.t += dt*SPEED;
+    while (G.moving && G.seg.t >= 1){
+      const over = G.seg.t - 1, reached = G.seg.to;
+      arrive(reached);
+      if (G.finished){ G.moving = false; G.seg = null; break; }
+      if (G.path.length){ G.seg = { from: reached, to: G.path.shift(), t: over }; }
+      else {
+        G.moving = false; G.seg = null;
+        if (G.queued){ const q = G.queued; G.queued = null; go(q); }
+      }
+    }
+  }
+  if (G.started && !G.finished && !G.pausedAt) G.elapsed = (now - G.t0)/1000;
+  const txt = fmt(G.elapsed);
+  if (hTime.textContent !== txt) hTime.textContent = txt;
+}
+const hTime = $('hTime');
+
+function pause(){ if (G && G.started && !G.finished && !G.pausedAt) G.pausedAt = performance.now(); }
+function resume(){ if (G && G.pausedAt){ G.t0 += performance.now() - G.pausedAt; G.pausedAt = 0; } }
+
+/* ---------- Малювання ---------- */
+function resize(){
+  W = Math.max(1, stage.clientWidth); H = Math.max(1, stage.clientHeight);
+  DPR = Math.min(window.devicePixelRatio || 1, 3);
+  for (const c of [cv, sCv, fCv]){ c.width = Math.round(W*DPR); c.height = Math.round(H*DPR); }
+  layout(); paintStatic();
+}
+function layout(){
+  if (!G) return;
+  const m = G.maze, pad = Math.max(10, Math.min(W, H)*0.035);
+  cell = Math.max(4, Math.floor(Math.min((W - 2*pad)/m.cols, (H - 2*pad)/m.rows)));
+  ox = Math.round((W - cell*m.cols)/2); oy = Math.round((H - cell*m.rows)/2);
+}
+const center = c => ({ x: ox + (c % G.maze.cols + .5)*cell, y: oy + (((c/G.maze.cols) | 0) + .5)*cell });
+
+function paintStatic(){
+  if (!G || !W) return;
+  const m = G.maze, g = sctx;
+  g.setTransform(DPR,0,0,DPR,0,0);
+  g.fillStyle = T.paper; g.fillRect(0, 0, W, H);
+  // міліметрівка: пів клітинки
+  const step = cell/2;
+  g.strokeStyle = T.grid; g.lineWidth = 1; g.beginPath();
+  for (let x = ox % step; x <= W; x += step){ const X = Math.round(x) + .5; g.moveTo(X, 0); g.lineTo(X, H); }
+  for (let y = oy % step; y <= H; y += step){ const Y = Math.round(y) + .5; g.moveTo(0, Y); g.lineTo(W, Y); }
+  g.stroke();
+  // стіни
+  g.strokeStyle = T.wall; g.lineWidth = Math.max(2, Math.round(cell*0.12)); g.lineCap = 'square'; g.beginPath();
+  for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++){
+    const o = m.open[y*m.cols + x], X = ox + x*cell, Y = oy + y*cell;
+    if (!(o & 1)){ g.moveTo(X, Y); g.lineTo(X + cell, Y); }
+    if (!(o & 8)){ g.moveTo(X, Y); g.lineTo(X, Y + cell); }
+    if (x === m.cols-1 && !(o & 2)){ g.moveTo(X + cell, Y); g.lineTo(X + cell, Y + cell); }
+    if (y === m.rows-1 && !(o & 4)){ g.moveTo(X, Y + cell); g.lineTo(X + cell, Y + cell); }
+  }
+  g.stroke();
+  // дім
+  const h = center(m.start), s = cell*0.26;
+  g.strokeStyle = T.steel; g.lineWidth = Math.max(1.5, cell*0.07); g.lineJoin = 'round'; g.beginPath();
+  g.moveTo(h.x - s, h.y + s*.8); g.lineTo(h.x - s, h.y - s*.1); g.lineTo(h.x, h.y - s); g.lineTo(h.x + s, h.y - s*.1); g.lineTo(h.x + s, h.y + s*.8); g.closePath();
+  g.stroke();
+}
+
+function playerPos(){
+  let p;
+  if (G.moving && G.seg){
+    const a = center(G.seg.from), b = center(G.seg.to), t = clamp(G.seg.t, 0, 1);
+    p = { x: a.x + (b.x - a.x)*t, y: a.y + (b.y - a.y)*t };
+  } else p = center(G.cell);
+  if (G.bump){ const D = DIRS[G.bump.k], a = Math.sin(G.bump.t*Math.PI)*cell*0.13; p.x += D.dx*a; p.y += D.dy*a; }
+  return p;
+}
+
+function rrect(g, x, y, w, h, r){
+  g.beginPath();
+  if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h);
+}
+
+function drawItem(c, k){
+  const p = center(c), s = cell*0.62, u = cell*0.17;
+  rrect(ctx, p.x - s/2, p.y - s/2, s, s, cell*0.1);
+  ctx.fillStyle = T.accent; ctx.fill();
+  ctx.save(); ctx.translate(p.x, p.y); ctx.scale(u, u);
+  ctx.strokeStyle = T['on-accent']; ctx.fillStyle = T['on-accent'];
+  ctx.lineWidth = Math.max(1.2, cell*0.05)/u; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.beginPath();
+  if (k === 'docs'){
+    ctx.rect(-.62, -.85, 1.24, 1.7); ctx.moveTo(-.3, -.25); ctx.lineTo(.3, -.25); ctx.moveTo(-.3, .2); ctx.lineTo(.3, .2); ctx.moveTo(-.3, .55); ctx.lineTo(.1, .55);
+  } else if (k === 'water'){
+    ctx.moveTo(0, -.95); ctx.bezierCurveTo(.35, -.45, .7, -.05, .7, .3); ctx.arc(0, .3, .7, 0, Math.PI, false); ctx.bezierCurveTo(-.7, -.05, -.35, -.45, 0, -.95); ctx.closePath();
+  } else if (k === 'light'){
+    ctx.rect(-.24, -.05, .48, 1); ctx.moveTo(-.24, -.05); ctx.lineTo(-.52, -.52); ctx.lineTo(.52, -.52); ctx.lineTo(.24, -.05);
+    ctx.moveTo(-.45, -.72); ctx.lineTo(-.62, -.95); ctx.moveTo(0, -.75); ctx.lineTo(0, -1.02); ctx.moveTo(.45, -.72); ctx.lineTo(.62, -.95);
+  } else if (k === 'aid'){
+    ctx.rect(-.85, -.6, 1.7, 1.35); ctx.moveTo(-.3, -.6); ctx.lineTo(-.3, -.88); ctx.lineTo(.3, -.88); ctx.lineTo(.3, -.6);
+    ctx.moveTo(0, -.2); ctx.lineTo(0, .38); ctx.moveTo(-.29, .09); ctx.lineTo(.29, .09);
+  } else if (k === 'power'){
+    ctx.rect(-.48, -.72, .96, 1.62); ctx.moveTo(-.18, -.9); ctx.lineTo(.18, -.9);
+    ctx.moveTo(.12, -.42); ctx.lineTo(-.18, .1); ctx.lineTo(.12, .1); ctx.lineTo(-.12, .6);
+  }
+  ctx.stroke(); ctx.restore();
+}
+
+function drawFog(P){
+  const m = G.maze, g = fctx;
+  g.setTransform(DPR,0,0,DPR,0,0);
+  g.globalCompositeOperation = 'source-over'; g.fillStyle = T.fog; g.fillRect(0, 0, W, H);
+  g.globalCompositeOperation = 'destination-out';
+  g.fillStyle = 'rgba(0,0,0,.55)'; g.beginPath();
+  for (let i = 0; i < m.n; i++) if (G.seen[i]){ const x = ox + (i % m.cols)*cell, y = oy + ((i/m.cols) | 0)*cell; g.rect(x - 1, y - 1, cell + 2, cell + 2); }
+  g.fill();
+  const R = cell*(G.hasLight ? 3.6 : 2.3), grd = g.createRadialGradient(P.x, P.y, R*0.35, P.x, P.y, R);
+  grd.addColorStop(0, 'rgba(0,0,0,1)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grd; g.fillRect(P.x - R, P.y - R, R*2, R*2);
+  g.globalCompositeOperation = 'source-over';
+  ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(fCv, 0, 0); ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+
+function drawShelter(now){
+  const p = center(G.maze.exit);
+  if (!RM.matches && !G.finished){
+    const a = .5 + .5*Math.sin(now/420);
+    ctx.save(); ctx.globalAlpha = .25 + .35*a; ctx.strokeStyle = T.accent; ctx.lineWidth = Math.max(1.5, cell*0.06);
+    ctx.beginPath(); ctx.arc(p.x, p.y, cell*(.56 + .07*a), 0, Math.PI*2); ctx.stroke(); ctx.restore();
+  }
+  const k = cell*0.84/79;
+  ctx.save(); ctx.translate(p.x - 39.5*k, p.y - 30*k); ctx.scale(k, k);
+  ctx.fillStyle = '#FCDE00'; ctx.fill(DOME);
+  ctx.fillStyle = '#84969A'; ctx.fill(MONO, 'evenodd');
+  ctx.restore();
+}
+
+function drawPlayer(P, now){
+  let r = cell*0.27;
+  if (G.finished) r *= Math.max(0, 1 - (now - G.winAt)/420);
+  if (r <= 0.5) return;
+  ctx.beginPath(); ctx.arc(P.x, P.y, r, 0, Math.PI*2);
+  ctx.fillStyle = T.player; ctx.fill();
+  ctx.lineWidth = Math.max(2, cell*0.09); ctx.strokeStyle = T.accent; ctx.stroke();
+}
+
+function draw(now){
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!G || !W) return;
+  ctx.drawImage(sCv, 0, 0);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  const P = playerPos();
+  // пройдений шлях
+  ctx.save();
+  ctx.strokeStyle = T.trail; ctx.lineWidth = Math.max(1.5, cell*0.08); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.setLineDash([cell*0.16, cell*0.14]);
+  ctx.beginPath(); const c0 = center(G.trail[0]); ctx.moveTo(c0.x, c0.y);
+  for (let i = 1; i < G.trail.length; i++){ const c = center(G.trail[i]); ctx.lineTo(c.x, c.y); }
+  ctx.lineTo(P.x, P.y); ctx.stroke(); ctx.restore();
+  for (const [c, k] of G.items) drawItem(c, k);
+  if (G.dark) drawFog(P);
+  drawShelter(now);
+  drawPlayer(P, now);
+}
+
+let last = performance.now();
+function frame(now){
+  const dt = Math.min(0.05, Math.max(0, (now - last)/1000)); last = now;
+  update(dt, now); draw(now);
+  requestAnimationFrame(frame);
+}
+
+/* ---------- Інтерфейс ---------- */
+let toastTimer = 0;
+function toast(msg, ms){
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); if (ms > 0) toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+}
+function hideToast(){ clearTimeout(toastTimer); $('toast').classList.remove('show'); }
+
+function renderKit(){
+  const el = $('hKit'); el.textContent = '';
+  for (let i = 0; i < G.total; i++){ const s = document.createElement('span'); s.className = 'pip' + (i < G.got.length ? ' on' : ''); el.appendChild(s); }
+  el.setAttribute('aria-label', 'Тривожна валізка: ' + G.got.length + ' з ' + G.total);
+}
+function renderHud(){
+  $('hLevel').textContent = pad2(G.level);
+  hTime.textContent = fmt(0);
+  $('bDist').textContent = '0 м';
+  $('bPar').textContent = fmtPar(G.maze.par);
+  renderKit();
+}
+
+function levelToast(){
+  if (G.level === 1) toast('Свайпни в потрібний бік або торкнися поруч із жовтою точкою', 0);
+  else if (G.dark) toast('Рівень ' + pad2(G.level) + ' · знеструмлення. Видно лише поруч, ліхтарик розширить огляд', 3400);
+  else toast('Рівень ' + pad2(G.level) + ' · норматив ' + fmtPar(G.maze.par), 2000);
+}
+
+function play(level){
+  if (level) initLevel(level);
+  $('win').hidden = true; $('intro').hidden = true;
+  screen = 'play'; resume(); levelToast();
+}
+
+function openIntro(boot){
+  pause(); screen = 'intro'; hideToast();
+  const mid = !boot && G && G.started && !G.finished;
+  $('startBtn').textContent = mid ? 'Повернутися до гри' : (G.level > 1 ? 'Продовжити · рівень ' + G.level : 'Почати');
+  $('fromOneBtn').hidden = !(G.level > 1 || mid);
+  $('intro').hidden = false;
+  $('startBtn').focus({ preventScroll: true });
+}
+
+function win(){
+  G.finished = true; G.winAt = performance.now(); G.elapsed = (G.winAt - G.t0)/1000;
+  hTime.textContent = fmt(G.elapsed);
+  const m = G.maze, stars = [true, G.elapsed <= m.par, G.got.length === G.total];
+  const n = stars.filter(Boolean).length, prev = saved.best[G.level];
+  if (!prev || n > prev.s || (n === prev.s && G.elapsed < prev.t)) saved.best[G.level] = { s: n, t: +G.elapsed.toFixed(1) };
+  saved.max = Math.max(saved.max, G.level + 1);
+  store.write(saved);
+
+  $('wEyebrow').textContent = 'Рівень ' + pad2(G.level) + (G.dark ? ' · знеструмлення' : '') + ' · пройдено';
+  [...$('wArches').children].forEach((f, i) => f.classList.toggle('on', stars[i]));
+  $('wArches').setAttribute('aria-label', 'Арок: ' + n + ' з 3');
+  $('wTime').textContent = fmt(G.elapsed);
+  $('wPar').textContent = 'норматив ' + fmtPar(m.par);
+  $('wDist').textContent = G.walked*METERS + ' м';
+  $('wBest').textContent = 'найкоротший ' + m.dist*METERS + ' м';
+  $('wKit').textContent = G.got.length + ' / ' + G.total;
+  $('wKitNames').textContent = G.got.length ? G.got.map(k => KIT[k].toLowerCase()).join(', ') : 'порожня';
+  const f = FACTS[(G.level - 1) % FACTS.length];
+  $('wFact').textContent = f[0]; $('wMeaning').textContent = f[1];
+  hideToast();
+  setTimeout(() => {
+    screen = 'win'; $('win').hidden = false;
+    $('win').querySelector('.card').scrollTop = 0;
+    $('nextBtn').focus({ preventScroll: true });
+  }, RM.matches ? 150 : 700);
+}
+
+function applyPad(){
+  $('pad').hidden = !saved.pad;
+  $('padBtn').setAttribute('aria-pressed', String(!!saved.pad));
+}
+
+/* ---------- Керування ---------- */
+const dirOf = (dx, dy) => Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'E' : 'W') : (dy > 0 ? 'S' : 'N');
+let ptr = null;
+stage.addEventListener('pointerdown', e => {
+  if (screen !== 'play') return;
+  ptr = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, dir: null };
+  try { stage.setPointerCapture(e.pointerId); } catch(_){}
+});
+stage.addEventListener('pointermove', e => {
+  if (!ptr || e.pointerId !== ptr.id) return;
+  const dx = e.clientX - ptr.x, dy = e.clientY - ptr.y;
+  if (Math.hypot(dx, dy) < 22) return;
+  const d = dirOf(dx, dy);
+  if (d !== ptr.dir){ go(d); ptr.dir = d; }
+  ptr.x = e.clientX; ptr.y = e.clientY;
+});
+stage.addEventListener('pointerup', e => {
+  if (!ptr || e.pointerId !== ptr.id) return;
+  if (!ptr.dir && Math.hypot(e.clientX - ptr.x0, e.clientY - ptr.y0) < 12 && G){
+    const r = cv.getBoundingClientRect(), P = playerPos();
+    const dx = e.clientX - r.left - P.x, dy = e.clientY - r.top - P.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) > cell*0.45) go(dirOf(dx, dy));
+  }
+  ptr = null;
+});
+stage.addEventListener('pointercancel', () => { ptr = null; });
+
+const KEYMAP = { ArrowUp:'N', ArrowRight:'E', ArrowDown:'S', ArrowLeft:'W', KeyW:'N', KeyD:'E', KeyS:'S', KeyA:'W' };
+window.addEventListener('keydown', e => {
+  if (screen !== 'play' || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (KEYMAP[e.code]){ e.preventDefault(); go(KEYMAP[e.code]); }
+  else if (e.code === 'KeyR'){ e.preventDefault(); play(G.level); }
+});
+
+$('pad').addEventListener('click', e => { const b = e.target.closest('button[data-dir]'); if (b) go(b.dataset.dir); });
+$('padBtn').addEventListener('click', () => { saved.pad = !saved.pad; store.write(saved); applyPad(); });
+$('rulesBtn').addEventListener('click', () => openIntro(false));
+$('restartBtn').addEventListener('click', () => play(G.level));
+$('startBtn').addEventListener('click', () => play(0));
+$('fromOneBtn').addEventListener('click', () => play(1));
+$('nextBtn').addEventListener('click', () => play(G.level + 1));
+$('againBtn').addEventListener('click', () => play(G.level));
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) pause();
+  else { last = performance.now(); if (screen === 'play') resume(); }
+});
+function retheme(){ readTokens(); paintStatic(); }
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', retheme);
+new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+if (window.ResizeObserver) new ResizeObserver(resize).observe(stage); else window.addEventListener('resize', resize);
+document.fonts?.ready?.then?.(() => resize());
+
+if (window.HH_ALT){ const p = $('altLink'), l = document.createElement('a'); l.href = window.HH_ALT.href; l.textContent = window.HH_ALT.text; p.append(l); p.hidden = false; }
+
+/* ---------- Старт ---------- */
+function start(data){
+  readTokens(); applyPad();
+  W = stage.clientWidth; H = stage.clientHeight;
+  initLevel(data.level || saved.max || 1);
+  resize();
+  if (data.screen === 'play') play(0); else openIntro(true);
+  requestAnimationFrame(frame);
+}
+window.claude?.hot?.snapshot?.(() => ({ level: G && G.level, screen }));
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+})();
+</script>
+
+</body>
+</html>
