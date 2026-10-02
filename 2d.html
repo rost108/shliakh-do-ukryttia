@@ -21,6 +21,30 @@
 html{background:var(--bg);overscroll-behavior:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
 </style>
 <script>window.HH_ALT = {"href": "./", "text": "3D-версія гри"};</script>
+<script>
+(() => {
+  if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  const standalone = matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches || navigator.standalone === true;
+  const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua) || (ua.includes('Mac') && navigator.maxTouchPoints > 1);
+  const SHARE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 12v8h14v-8"/></svg>';
+  let deferred = null;
+  function render(done){
+    const box = document.getElementById('installBox'); if (!box) return;
+    if (standalone){ box.hidden = true; return; }
+    if (done) box.innerHTML = '<p><b>Встановлено.</b> Гра тепер серед застосунків і працює без інтернету.</p>';
+    else if (deferred){
+      box.innerHTML = '<button class="btn ghost" id="installBtn" type="button">Встановити застосунок</button><p>Іконка з’явиться серед застосунків телефона; після першого запуску гра працює без інтернету.</p>';
+      box.querySelector('#installBtn').onclick = async () => { const d = deferred; deferred = null; d.prompt(); const r = await d.userChoice.catch(() => null); render(!!(r && r.outcome === 'accepted')); };
+    }
+    else if (ios) box.innerHTML = '<p><b>Встановити на iPhone:</b> у Safari натисни «Поділитися» ' + SHARE + ', далі «На початковий екран». Гра відкриватиметься як застосунок і працюватиме без інтернету.</p>';
+    else box.innerHTML = '<p><b>Встановити на телефон:</b> у меню браузера обери «Встановити застосунок» або «Додати на головний екран».</p>';
+    box.hidden = false;
+  }
+  addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; render(); });
+  addEventListener('appinstalled', () => { deferred = null; render(true); });
+  document.addEventListener('DOMContentLoaded', () => render());
+})();
+</script>
 <title>Шлях до укриття 2D</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -152,6 +176,10 @@ h2{font-size:clamp(30px,9vw,40px)}
 .fact .f{margin:0;font-weight:600;font-size:16px;line-height:1.35}
 .fact .m{margin:0;font-size:14px;color:var(--muted)}
 .site{margin:0;font-family:var(--f-mono);font-size:11px;color:var(--muted);text-align:center}
+.install{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:14px}
+.install p{margin:0;font-size:13.5px;color:var(--muted)}
+.install b{color:var(--ink)}
+.install svg{width:15px;height:15px;vertical-align:-2px}
 .site a{color:var(--ink)}
 </style>
 </head>
@@ -223,6 +251,7 @@ h2{font-size:clamp(30px,9vw,40px)}
         <button class="btn" id="startBtn">Почати</button>
         <button class="btn ghost" id="fromOneBtn" hidden>З першого рівня</button>
       </div>
+      <div class="install" id="installBox" hidden></div>
       <p class="site" id="altLink" hidden></p>
     </div>
   </section>
