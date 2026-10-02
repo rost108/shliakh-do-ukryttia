@@ -354,10 +354,11 @@ function bfs(m, sources){
 }
 
 function buildMaze(level, aspect, dark){
-  const short = Math.min(5 + level, 16);
+  // розмір: до 11-го рівня +1 клітинка щорівня, далі +1 кожні два рівні; межа 22 — щоб клітинка лишалась під палець
+  const short = level <= 11 ? 5 + level : Math.min(22, 16 + Math.floor((level - 11)/2));
   let cols, rows;
-  if (aspect >= 1){ cols = short; rows = clamp(Math.round(short*aspect), short, 30); }
-  else { rows = short; cols = clamp(Math.round(short/aspect), short, 30); }
+  if (aspect >= 1){ cols = short; rows = clamp(Math.round(short*aspect), short, Math.round(short*2.1)); }
+  else { rows = short; cols = clamp(Math.round(short/aspect), short, Math.round(short*2.1)); }
   const R = rng(level*7919 + 104729);
   const n = cols*rows, open = new Uint8Array(n), seen = new Uint8Array(n);
   const m = { cols, rows, n, open };
@@ -391,7 +392,7 @@ function buildMaze(level, aspect, dark){
   let stops = 1; for (let i = 1; i < route.length-1; i++) if (DEG[open[route[i]]] !== 2) stops++;
 
   // тривожна валізка — у тупиках
-  const want = level === 1 ? 1 : level === 2 ? 2 : 3;
+  const want = level === 1 ? 1 : level === 2 ? 2 : level < 12 ? 3 : level < 20 ? 4 : 5;
   const dead = [];
   for (let i = 0; i < n; i++) if (i !== start && i !== exit && DEG[open[i]] === 1 && A.d[i] >= 3) dead.push(i);
   shuffle(dead, R);
