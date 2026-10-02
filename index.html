@@ -622,177 +622,352 @@ const house = new THREE.Group();
   scene.add(house);
 }
 
-// персонажі: людина (з початку), котик, пекінес, інженер — відкриваються арками за рівні
-const HM = {
-  skin: new THREE.MeshStandardMaterial({ color: '#E6C9A8', roughness: .7 }),
-  pants: new THREE.MeshStandardMaterial({ color: '#3A4245', roughness: .8 }),
-  shoe: new THREE.MeshStandardMaterial({ color: '#1C1F21', roughness: .6 }),
-  strip: new THREE.MeshStandardMaterial({ color: '#E9EEF0', roughness: .3, emissive: '#ffffff', emissiveIntensity: .2 }),
-  steel: new THREE.MeshStandardMaterial({ color: '#5F6B6E', roughness: .7 }),
-  helmet: new THREE.MeshStandardMaterial({ color: '#F4F2EC', roughness: .35 }),
-  ginger: new THREE.MeshStandardMaterial({ color: '#E08A3C', roughness: .8 }),
-  gingerDark: new THREE.MeshStandardMaterial({ color: '#B8642A', roughness: .8 }),
-  cream: new THREE.MeshStandardMaterial({ color: '#F1DEC0', roughness: .85 }),
-  pink: new THREE.MeshStandardMaterial({ color: '#E59AA0', roughness: .6 }),
-  eye: new THREE.MeshStandardMaterial({ color: '#141414', roughness: .2 }),
-  peke: new THREE.MeshStandardMaterial({ color: '#D9A766', roughness: .95 }),
-  pekeLight: new THREE.MeshStandardMaterial({ color: '#EED3A2', roughness: .95 }),
-  pekeEar: new THREE.MeshStandardMaterial({ color: '#A8723F', roughness: .95 }),
-  mask: new THREE.MeshStandardMaterial({ color: '#4A3326', roughness: .8 }),
-};
+// персонажі: людина (з початку), котик, пекінес, інженер — відкриваються арками за рівні.
+// Моделі зібрані в реальних метрах і пропорціях; у грі масштабовані, щоб читалися з висоти камери.
+const V2 = (x, y) => new THREE.Vector2(x, y);
 const part = (geo, mat, parent, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
-const joint = (parent, x = 0, y = 0, z = 0) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
-const limb = (parent, r, len, mat) => part(new THREE.CapsuleGeometry(r, len, 4, 10), mat, parent, 0, -(len/2 + r*0.4));   // звисає від шарніра
+const joint = (parent, x = 0, y = 0, z = 0, rx = 0) => { const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.x = rx; g.userData.rx = rx; parent.add(g); return g; };
+const lathe = (pts, seg = 24) => new THREE.LatheGeometry(pts.map(([r, y]) => V2(r, y)), seg);       // профіль знизу вгору
+const latheZ = (pts, seg = 28) => lathe(pts, seg).rotateX(Math.PI/2);                                // уздовж тіла: хвіст → голова
+// сегмент кінцівки: звужена капсула від шарніра вниз; mid = [[частка довжини, радіус]] — м'язи
+function taper(r0, r1, len, mid = [], seg = 16){
+  const pts = [];
+  for (let i = 0; i <= 6; i++){ const a = -Math.PI/2 + Math.PI/2*i/6; pts.push([r1*Math.cos(a), -len + r1*Math.sin(a)]); }
+  for (const [t, r] of mid.slice().sort((a, b) => b[0] - a[0])) pts.push([r, -len*t]);
+  for (let i = 0; i <= 6; i++){ const a = Math.PI/2*i/6; pts.push([r0*Math.cos(a), r0*Math.sin(a)]); }
+  return lathe(pts, seg);
+}
+const std = (color, roughness = 0.85, extra = {}) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness }, extra));
 
-// людина: жовта куртка, кепка, тривожний рюкзак; інженер — сталева куртка з жовтою смугою і біла каска
+// шерсть таббі: u — навколо тіла (0/1 черево, 0,5 спина), v — уздовж; поперечні хвилясті смуги
+function tabbyTex(belly, stripes){
+  return canvasTex(512, 256, (g, w, h) => {
+    const R = rng(11 + stripes);
+    g.fillStyle = '#D4843A'; g.fillRect(0, 0, w, h);
+    const gr = g.createLinearGradient(0, 0, w, 0);
+    gr.addColorStop(0, `rgba(246,226,196,${belly})`); gr.addColorStop(0.22, 'rgba(246,226,196,0)');
+    gr.addColorStop(0.42, 'rgba(140,72,22,0)'); gr.addColorStop(0.5, 'rgba(140,72,22,.5)'); gr.addColorStop(0.58, 'rgba(140,72,22,0)');
+    gr.addColorStop(0.78, 'rgba(246,226,196,0)'); gr.addColorStop(1, `rgba(246,226,196,${belly})`);
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    g.lineCap = 'round';
+    for (let k = 0; k < stripes; k++){
+      const y0 = (k + 0.5)/stripes*h + (R() - 0.5)*h/stripes*0.4, ph = R()*6;
+      for (let x = 0; x < w; x += 3){
+        const u = x/w, side = Math.abs(u - 0.5)*2;              // 0 — хребет, 1 — черево
+        if (side > 0.8) continue;
+        const y1 = y0 + Math.sin(u*Math.PI*8 + ph)*3.5, y2 = y0 + Math.sin((u + 3/w)*Math.PI*8 + ph)*3.5;
+        g.strokeStyle = `rgba(112,52,14,${0.8*(1 - side/0.8)})`;
+        g.lineWidth = (h/stripes)*0.42*(1 - side*0.6);
+        g.beginPath(); g.moveTo(x, y1); g.lineTo(x + 3, y2); g.stroke();
+      }
+    }
+    for (let i = 0; i < 9000; i++){                              // ворс уздовж тіла
+      const x = R()*w, y = R()*h, l = 2 + R()*4;
+      g.strokeStyle = R() < 0.5 ? 'rgba(255,240,215,.10)' : 'rgba(90,40,10,.10)'; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + (R() - 0.5), y + l); g.stroke();
+    }
+  });
+}
+// голова кота: фронт на u = 0,25 (сфера), верх — угорі полотна; «М» на лобі, світла морда
+const catHeadTex = canvasTex(256, 128, (g, w, h) => {
+  const R = rng(21);
+  g.fillStyle = '#D4843A'; g.fillRect(0, 0, w, h);
+  const fx = w*0.25;
+  let gr = g.createRadialGradient(fx, h*0.78, 2, fx, h*0.78, w*0.16);
+  gr.addColorStop(0, 'rgba(246,226,196,1)'); gr.addColorStop(1, 'rgba(246,226,196,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  g.strokeStyle = 'rgba(112,52,14,.75)'; g.lineCap = 'round'; g.lineWidth = 3;
+  for (const dx of [-14, -6, 0, 6, 14]){ g.beginPath(); g.moveTo(fx + dx, h*0.1); g.lineTo(fx + dx*0.8, h*0.36); g.stroke(); }
+  for (const s of [-1, 1]) for (const dy of [0.5, 0.6]){ g.beginPath(); g.moveTo(fx + s*20, h*dy); g.lineTo(fx + s*38, h*(dy + 0.03)); g.stroke(); }
+  for (let i = 0; i < 2500; i++){ const x = R()*w, y = R()*h; g.fillStyle = R() < 0.5 ? 'rgba(255,240,215,.12)' : 'rgba(90,40,10,.12)'; g.fillRect(x, y, 1, 2); }
+});
+// шерсть пекінеса — «оболонки»: шари, що відступають по нормалі; рідшають до кінчиків і обвисають
+const hairTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'), img = g.createImageData(128, 128), R = rng(5);
+  for (let i = 0; i < img.data.length; i += 4){ const v = R() < 0.85 ? Math.floor(R()*255) : 0; img.data[i] = img.data[i+1] = img.data[i+2] = v; img.data[i+3] = 255; }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(9, 9);
+  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  return t;
+})();
+function furSet(base, tip, n){
+  const a = new THREE.Color(base), b = new THREE.Color(tip);
+  return Array.from({ length: n }, (_, i) => {
+    const h = (i + 1)/n;
+    return new THREE.MeshStandardMaterial({ color: a.clone().lerp(b, h).multiplyScalar(0.7 + 0.3*h), roughness: 1, alphaMap: hairTex, alphaTest: 0.18 + 0.78*h });
+  });
+}
+function fur(mesh, spec){
+  const src = mesh.geometry, pos = src.attributes.position, nor = src.attributes.normal;
+  spec.mats.forEach((mat, i) => {
+    const h = (i + 1)/spec.mats.length, arr = new Float32Array(pos.count*3), g = new THREE.BufferGeometry();
+    for (let k = 0; k < pos.count; k++){
+      arr[k*3]     = pos.getX(k) + nor.getX(k)*h*spec.len;
+      arr[k*3 + 1] = pos.getY(k) + nor.getY(k)*h*spec.len - h*h*spec.droop;
+      arr[k*3 + 2] = pos.getZ(k) + nor.getZ(k)*h*spec.len;
+    }
+    g.setAttribute('position', new THREE.BufferAttribute(arr, 3)); g.setAttribute('normal', nor); g.setAttribute('uv', src.attributes.uv);
+    if (src.index) g.setIndex(src.index);
+    mesh.add(new THREE.Mesh(g, mat));
+  });
+}
+
+const HM = {
+  skin: std('#E3BC98', 0.7), hair: std('#3A2A20', 0.9), lip: std('#B9786A', 0.7), eye: std('#141414', 0.25),
+  jacket: std('#EFC81A', 0.82), jeans: std('#3E4D63', 0.92), shoe: std('#2A2D30', 0.7), sole: std('#ECE8E0', 0.8),
+  zip: std('#2A2D30', 0.5), cap: M.pack, pack: M.pack,
+  strip: std('#E3E8EA', 0.3, { emissive: '#ffffff', emissiveIntensity: 0.18 }),
+  shirt: std('#55626A', 0.85), work: std('#2F3438', 0.9), boot: std('#4A3A2A', 0.8),
+  vest: std('#F2DD1A', 0.7), helmet: std('#F4F2EC', 0.35), paper: std('#DCE6EE', 0.9),
+  catBody: std('#ffffff', 0.92, { map: tabbyTex(1, 11) }), catLeg: std('#ffffff', 0.92, { map: tabbyTex(0.6, 7) }),
+  catHead: std('#ffffff', 0.9, { map: catHeadTex }), catCream: std('#F3DEC0', 0.9), catOrange: std('#D4843A', 0.9), catDark: std('#9A521C', 0.9),
+  pink: std('#E39CA2', 0.6), iris: std('#9DBA3B', 0.2), pupil: std('#0B0B0B', 0.15), white: std('#FFFFFF', 0.1),
+  collar: std('#FCDE00', 0.5),
+  pekeBase: std('#9A5E2A', 1), mask: std('#2A1D16', 0.85), nose: std('#121212', 0.3),
+};
+const FUR = {
+  body: { mats: furSet('#9A5E2A', '#EDCB93', 12), len: 0.03, droop: 0.024 },
+  mane: { mats: furSet('#B07438', '#F4DAA8', 12), len: 0.034, droop: 0.02 },
+  head: { mats: furSet('#9A5E2A', '#E2B577', 6), len: 0.012, droop: 0.004 },
+  ear:  { mats: furSet('#5E3A1E', '#C08A50', 10), len: 0.026, droop: 0.032 },
+  tail: { mats: furSet('#B07438', '#F7E0B6', 9), len: 0.04, droop: 0.012 },
+  leg:  { mats: furSet('#9A5E2A', '#E2B577', 5), len: 0.014, droop: 0.012 },
+};
+
+// людина ~1,8 м: таз, стегна, коліна, гомілковостоп, хребет, плечі, лікті, кисті, шия
 function buildHuman(o){
   const root = new THREE.Group(), r = {};
   const body = r.body = joint(root);
-  const hips = r.hips = joint(body, 0, 0.98, 0);
-  part(new THREE.CapsuleGeometry(0.15, 0.16, 4, 10).rotateZ(Math.PI/2), HM.pants, hips);
+  const hips = r.hips = joint(body, 0, 0.95, 0);
+  part(new THREE.SphereGeometry(0.16, 20, 14), o.pants, hips).scale.set(1.04, 0.62, 0.74);
   for (const s of [-1, 1]){
-    const hip = joint(hips, 0.11*s, -0.02, 0);
-    limb(hip, 0.085, 0.3, HM.pants);
-    const knee = joint(hip, 0, -0.46, 0);
-    limb(knee, 0.075, 0.3, HM.pants);
-    part(new THREE.BoxGeometry(0.13, 0.08, 0.27), HM.shoe, knee, 0, -0.47, 0.05);
-    r[s < 0 ? 'hipL' : 'hipR'] = hip; r[s < 0 ? 'kneeL' : 'kneeR'] = knee;
+    const hip = joint(hips, 0.092*s, -0.03, 0);
+    part(taper(0.086, 0.058, 0.41, [[0.22, 0.083]]), o.pants, hip);
+    const knee = joint(hip, 0, -0.42, 0);
+    part(taper(0.057, 0.04, 0.4, [[0.22, 0.06], [0.5, 0.052]]), o.pants, knee);
+    const ank = joint(knee, 0, -0.42, 0);
+    part(new THREE.CapsuleGeometry(0.044, 0.16, 6, 14).rotateX(Math.PI/2), o.shoe, ank, 0, -0.034, 0.045).scale.set(1.12, 0.78, 1);
+    part(new THREE.BoxGeometry(0.098, 0.022, 0.265), o.sole, ank, 0, -0.064, 0.045);
+    r[s < 0 ? 'hipL' : 'hipR'] = hip; r[s < 0 ? 'kneeL' : 'kneeR'] = knee; r[s < 0 ? 'ankL' : 'ankR'] = ank;
   }
-  const spine = r.spine = joint(hips, 0, 0.06, 0);
-  part(new THREE.CapsuleGeometry(0.19, 0.32, 4, 12), o.jacket, spine, 0, 0.3).scale.set(1.15, 1, 0.8);
-  const strip = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.045, 18, 1, true), o.strip);
-  strip.scale.set(1.17, 1, 0.83); strip.position.y = 0.2; spine.add(strip);
-  for (const s of [-1, 1]){
-    const sh = joint(spine, 0.27*s, 0.5, 0);
-    limb(sh, 0.07, 0.2, o.jacket);
-    const el = joint(sh, 0, -0.32, 0);
-    limb(el, 0.06, 0.18, o.jacket);
-    part(new THREE.SphereGeometry(0.065, 10, 8), HM.skin, el, 0, -0.33);
-    r[s < 0 ? 'shL' : 'shR'] = sh; r[s < 0 ? 'elL' : 'elR'] = el;
-  }
-  const neck = r.neck = joint(spine, 0, 0.64, 0);
-  part(new THREE.SphereGeometry(0.15, 18, 14), HM.skin, neck, 0, 0.14);
-  if (o.hat === 'hardhat'){
-    part(new THREE.SphereGeometry(0.175, 18, 10, 0, Math.PI*2, 0, Math.PI/2), HM.helmet, neck, 0, 0.16);
-    part(new THREE.CylinderGeometry(0.23, 0.23, 0.02, 24), HM.helmet, neck, 0, 0.165, 0.02);
-    part(new THREE.BoxGeometry(0.04, 0.05, 0.3), HM.helmet, neck, 0, 0.33, 0);
+  const spine = r.spine = joint(hips, 0, 0.07, 0);
+  const torsoPts = [[0, -0.03], [0.128, 0], [0.134, 0.05], [0.15, 0.15], [0.165, 0.26], [0.162, 0.33], [0.14, 0.385], [0.09, 0.425], [0.05, 0.445], [0, 0.45]];
+  part(lathe(torsoPts, 28), o.jacket, spine).scale.set(1.22, 1, 0.74);
+  if (o.vest){
+    part(lathe(torsoPts.map(([a, b]) => [a*1.06, b]).slice(0, 7), 28), HM.vest, spine, 0, 0.005).scale.set(1.22, 1, 0.76);
+    for (const y of [0.12, 0.22]) part(new THREE.CylinderGeometry(0.168, 0.168, 0.022, 28, 1, true), HM.strip, spine, 0, y).scale.set(1.23, 1, 0.78);
   } else {
-    part(new THREE.SphereGeometry(0.158, 18, 10, 0, Math.PI*2, 0, Math.PI/2), M.pack, neck, 0, 0.16);
-    part(new THREE.BoxGeometry(0.2, 0.025, 0.13), M.pack, neck, 0, 0.17, 0.15);       // козирок дивиться вперед
+    part(new THREE.CylinderGeometry(0.163, 0.163, 0.026, 28, 1, true), HM.strip, spine, 0, 0.2).scale.set(1.23, 1, 0.77);
+    part(new THREE.BoxGeometry(0.008, 0.34, 0.01), HM.zip, spine, 0, 0.2, 0.121);
+    part(new THREE.TorusGeometry(0.07, 0.03, 10, 20, Math.PI*1.2), o.jacket, spine, 0, 0.42, -0.03).rotation.set(Math.PI/2 - 0.35, 0, Math.PI*0.9);   // капюшон
   }
-  part(new THREE.BoxGeometry(0.36, 0.44, 0.18), M.pack, spine, 0, 0.32, -0.22);       // тривожний рюкзак
-  part(new THREE.BoxGeometry(0.22, 0.05, 0.012), M.body, spine, 0, 0.42, -0.316);
-  return { root, scale: 1.75, cadence: [1.0, 1.4], anim: st => animHuman(r, st) };
+  for (const s of [-1, 1]){
+    const sh = joint(spine, 0.198*s, 0.38, 0);
+    part(new THREE.SphereGeometry(0.056, 16, 12), o.jacket, sh);
+    part(taper(0.05, 0.04, 0.27, [[0.3, 0.05]]), o.jacket, sh);
+    const el = joint(sh, 0, -0.285, 0);
+    part(taper(0.041, 0.034, 0.24, [[0.25, 0.042]]), o.jacket, el);
+    if (!o.vest) part(new THREE.CylinderGeometry(0.039, 0.039, 0.02, 16, 1, true), HM.strip, el, 0, -0.16);
+    const wr = joint(el, 0, -0.262, 0);
+    part(new THREE.SphereGeometry(0.042, 12, 10), HM.skin, wr, 0, -0.045, 0).scale.set(0.72, 1.3, 0.45);
+    part(new THREE.CapsuleGeometry(0.012, 0.035, 4, 8), HM.skin, wr, 0.02*s, -0.035, 0.022).rotation.x = 0.6;   // великий палець
+    r[s < 0 ? 'shL' : 'shR'] = sh; r[s < 0 ? 'elL' : 'elR'] = el; r[s < 0 ? 'wrL' : 'wrR'] = wr;
+  }
+  if (o.vest){   // згорнуте креслення в лівій руці
+    part(new THREE.CylinderGeometry(0.022, 0.022, 0.42, 14), HM.paper, r.wrL, 0, -0.06, 0.06).rotation.x = Math.PI/2;
+  }
+  const neck = r.neck = joint(spine, 0, 0.43, 0);
+  part(new THREE.CylinderGeometry(0.046, 0.05, 0.1, 14), HM.skin, neck, 0, 0.04);
+  const head = joint(neck, 0, 0.1, 0);
+  part(new THREE.SphereGeometry(0.1, 24, 18), HM.skin, head, 0, 0.1, 0.005).scale.set(0.79, 1.1, 0.96);
+  part(new THREE.SphereGeometry(0.06, 14, 10), HM.skin, head, 0, 0.035, 0.03).scale.set(1.05, 0.8, 1);          // щелепа
+  part(new THREE.ConeGeometry(0.014, 0.034, 10), HM.skin, head, 0, 0.09, 0.098).rotation.x = Math.PI/2 + 0.3;   // ніс
+  part(new THREE.BoxGeometry(0.03, 0.006, 0.006), HM.lip, head, 0, 0.055, 0.092);
+  for (const s of [-1, 1]){
+    part(new THREE.SphereGeometry(0.009, 8, 6), HM.eye, head, 0.032*s, 0.118, 0.086);
+    part(new THREE.SphereGeometry(0.022, 10, 8), HM.skin, head, 0.079*s, 0.105, 0).scale.set(0.4, 1.1, 0.8);     // вуха
+  }
+  // волосся: півсфера, нахилена назад — відкриває лоб, закриває потилицю
+  const hair = part(new THREE.SphereGeometry(0.104, 24, 14, 0, Math.PI*2, 0, Math.PI/2), HM.hair, head, 0, 0.105, -0.008);
+  hair.scale.set(0.83, 1.08, 1.0); hair.rotation.x = -0.55;
+  if (o.hat === 'hardhat'){
+    part(new THREE.SphereGeometry(0.112, 22, 12, 0, Math.PI*2, 0, Math.PI/2), HM.helmet, head, 0, 0.15, 0).scale.set(0.95, 0.95, 1.08);
+    part(new THREE.CylinderGeometry(0.14, 0.14, 0.012, 26), HM.helmet, head, 0, 0.152, 0.012).scale.set(0.92, 1, 1.12);
+    part(new THREE.BoxGeometry(0.025, 0.03, 0.2), HM.helmet, head, 0, 0.255, 0);
+  } else {
+    part(new THREE.SphereGeometry(0.104, 22, 12, 0, Math.PI*2, 0, Math.PI/2), HM.cap, head, 0, 0.15, 0).scale.set(0.86, 0.9, 1);
+    part(new THREE.CylinderGeometry(0.075, 0.075, 0.01, 20, 1, false, -Math.PI/2, Math.PI), HM.cap, head, 0, 0.152, 0.07).scale.set(1, 1, 0.95);   // козирок
+  }
+  if (!o.vest){   // тривожний рюкзак на лямках
+    part(new THREE.CapsuleGeometry(0.1, 0.16, 6, 14), HM.pack, spine, 0, 0.25, -0.175).scale.set(1.45, 1, 0.62);
+    part(new THREE.BoxGeometry(0.2, 0.03, 0.012), M.body, spine, 0, 0.33, -0.24);
+    for (const s of [-1, 1]) part(new THREE.BoxGeometry(0.026, 0.13, 0.008), HM.pack, spine, 0.105*s, 0.36, 0.1).rotation.set(-0.5, 0, 0.1*s);   // лямки лише на плечах
+  }
+  return { root, scale: 1.85, cadence: [1.0, 1.4], anim: st => animHuman(r, st) };
 }
 function animHuman(r, st){
-  const { m, idle, p, t, still } = st, s = Math.sin(p);
-  r.hipL.rotation.x = -s*0.85*m;
-  r.hipR.rotation.x =  s*0.85*m;
-  r.kneeL.rotation.x = 0.04 + m*(0.15 + 1.1*Math.max(0, Math.cos(p - 5.3)));
-  r.kneeR.rotation.x = 0.04 + m*(0.15 + 1.1*Math.max(0, Math.cos(p + Math.PI - 5.3)));
+  const { m, idle, p, t, still } = st, s = Math.sin(p), c = Math.cos(p), A = 0.8*m;
+  r.hipL.rotation.x = -s*A; r.hipR.rotation.x = s*A;
+  r.kneeL.rotation.x = 0.04 + m*(0.15 + 1.15*Math.max(0, Math.cos(p - 5.3)));
+  r.kneeR.rotation.x = 0.04 + m*(0.15 + 1.15*Math.max(0, Math.cos(p + Math.PI - 5.3)));
+  r.ankL.rotation.x = m*(0.5*Math.max(0, -s) - 0.2*Math.max(0, s)) - 0.04;
+  r.ankR.rotation.x = m*(0.5*Math.max(0, s) - 0.2*Math.max(0, -s)) - 0.04;
   const sway = still ? 0 : idle*0.03*Math.sin(t*1.7);
-  r.shL.rotation.set( s*0.75*m + sway, 0, -0.1 - 0.04*idle);
-  r.shR.rotation.set(-s*0.75*m - sway, 0,  0.1 + 0.04*idle);
-  r.elL.rotation.x = r.elR.rotation.x = -(0.18 + 1.2*m);
-  r.body.position.y = m*Math.abs(Math.cos(p))*0.09 + st.hop*0.35;
-  r.hips.position.x = still ? 0 : idle*0.015*Math.sin(t*0.9);
-  r.hips.rotation.y = -s*0.1*m;
-  r.spine.rotation.set(0.22*m - st.bump*0.4, s*0.28*m, 0);
-  r.spine.scale.y = 1 + (still ? 0 : idle*0.012*Math.sin(t*2.2));
-  r.neck.rotation.set(-0.12*m, -s*0.2*m + (still ? 0 : idle*0.3*Math.sin(t*0.55)), 0);
-  if (st.wave){ r.shR.rotation.set(0, 0, 2.7 + 0.28*Math.sin(t*13)); r.elR.rotation.x = -0.25; }   // махає на порозі
+  r.shL.rotation.set( s*0.7*m + sway, 0, -0.07 - 0.03*idle);
+  r.shR.rotation.set(-s*0.7*m - sway, 0,  0.07 + 0.03*idle);
+  r.elL.rotation.set(-(0.14 + 1.25*m), 0, 0); r.elR.rotation.set(-(0.14 + 1.25*m), 0, 0);
+  r.body.position.y = m*Math.abs(c)*0.05 + st.hop*0.3;
+  r.hips.position.x = still ? 0 : idle*0.012*Math.sin(t*0.9);
+  r.hips.rotation.set(0, -s*0.12*m, c*0.045*m);
+  r.spine.rotation.set(0.18*m - st.bump*0.35, s*0.24*m, -c*0.03*m);
+  r.spine.scale.y = 1 + (still ? 0 : idle*0.01*Math.sin(t*2.2));
+  r.neck.rotation.set(-0.1*m, -s*0.2*m + (still ? 0 : idle*0.28*Math.sin(t*0.55)), 0);
+  if (st.wave){ r.shR.rotation.set(0, 0, 2.75 + 0.25*Math.sin(t*13)); r.elR.rotation.set(-0.25, 0, 0); }   // махає на порозі
 }
 
-// чотирилапі: спільний скелет — тулуб, голова, 4 лапи, хвіст із ланок
-function quadLegs(r, body, mat, paw, xs, zs, top, r0, len){
-  r.legs = [];
-  for (const [x, z] of [[-xs, zs], [xs, zs], [-xs, -zs], [xs, -zs]]){   // ПЛ, ПП, ЗЛ, ЗП
-    const j = joint(body, x, top, z);
-    limb(j, r0, len, mat);
-    part(new THREE.SphereGeometry(r0*1.05, 10, 8), paw, j, 0, -(len + r0*1.4), 0.02);
-    r.legs.push(j);
-  }
-}
-function animQuad(r, st, k){
-  const { m, idle, p, t, still } = st, s = Math.sin(p);
-  const a = k.stride*m;
-  r.legs[0].rotation.x = -s*a; r.legs[3].rotation.x = -s*a;   // рись: діагональні пари разом
-  r.legs[1].rotation.x =  s*a; r.legs[2].rotation.x =  s*a;
-  const happy = st.wave ? Math.abs(Math.sin(t*9))*0.35 : 0;
-  r.body.position.y = m*Math.abs(Math.cos(p))*k.bob + st.hop*0.4 + happy;
-  r.body.rotation.x = m*0.05*Math.sin(p*2) - st.bump*0.15;
-  r.body.rotation.z = (k.waddle || 0)*m*Math.sin(p);
-  r.head.rotation.set(-0.08*m + st.bump*0.5 + (still ? 0 : idle*0.06*Math.sin(t*1.3)), still ? 0 : idle*0.45*Math.sin(t*0.5), 0);
-  const wag = st.wave ? 26 : 2.2 + 6*m;
-  r.tail.forEach((seg, i) => { seg.rotation.y = (still ? 0 : Math.sin(t*wag - i*0.7))*(st.wave ? 0.5 : 0.18 + 0.12*m); });
-  if (r.ears) r.ears.forEach((e, i) => { e.rotation.z = e.userData.z0 + (still ? 0 : 0.12*m*Math.sin(p*2 + i)); });
-}
-
+// рудий таббі ~45 см без хвоста: передні лапи з ліктем, задні — стегно, коліно, «п'ята»; хвіст із 10 ланок
 function buildCat(){
   const root = new THREE.Group(), r = {};
   const body = r.body = joint(root);
-  part(new THREE.CapsuleGeometry(0.3, 0.55, 4, 14).rotateX(Math.PI/2), HM.ginger, body, 0, 0.62, 0).scale.set(1, 0.95, 1);
-  for (const z of [-0.2, 0, 0.2]) part(new THREE.CylinderGeometry(0.305, 0.305, 0.06, 18, 1, true).rotateX(Math.PI/2), HM.gingerDark, body, 0, 0.62, z).scale.set(1, 0.96, 1);
-  part(new THREE.SphereGeometry(0.22, 14, 10), HM.cream, body, 0, 0.55, 0.32).scale.set(1, 0.9, 0.8);   // світлі груди
-  quadLegs(r, body, HM.ginger, HM.cream, 0.17, 0.3, 0.55, 0.075, 0.36);
-  const head = r.head = joint(body, 0, 0.88, 0.5);
-  part(new THREE.SphereGeometry(0.25, 18, 14), HM.ginger, head).scale.set(1.12, 0.95, 1);
-  part(new THREE.SphereGeometry(0.11, 12, 10), HM.cream, head, 0, -0.07, 0.19).scale.set(1.3, 0.8, 0.9);
-  part(new THREE.SphereGeometry(0.03, 8, 6), HM.pink, head, 0, -0.02, 0.27);
+  const trunk = r.trunk = joint(body, 0, 0.2, 0);
+  part(latheZ([[0, -0.2], [0.03, -0.196], [0.05, -0.178], [0.061, -0.135], [0.066, -0.06], [0.068, 0.02], [0.066, 0.085], [0.058, 0.135], [0.042, 0.172], [0.02, 0.192], [0, 0.196]]), HM.catBody, trunk).scale.set(0.8, 1.05, 1);
+  part(new THREE.SphereGeometry(0.036, 16, 12), HM.catOrange, trunk, 0, 0.045, 0.165).scale.set(0.95, 1.15, 1.25);   // шия
+  part(new THREE.TorusGeometry(0.031, 0.0045, 8, 24), HM.collar, trunk, 0, 0.05, 0.178).rotation.x = Math.PI/2 - 0.55;
+  const head = r.head = joint(trunk, 0, 0.088, 0.212);
+  part(new THREE.SphereGeometry(0.042, 24, 18), HM.catHead, head).scale.set(1.08, 0.92, 1.02);
+  for (const s of [-1, 1]) part(new THREE.SphereGeometry(0.023, 14, 10), HM.catOrange, head, 0.019*s, -0.015, 0.015).scale.set(1, 0.85, 1);
+  part(new THREE.SphereGeometry(0.016, 14, 10), HM.catCream, head, 0, -0.018, 0.034).scale.set(1.4, 0.78, 0.95);
+  part(new THREE.SphereGeometry(0.0055, 8, 6), HM.pink, head, 0, -0.008, 0.048).scale.set(1.35, 0.8, 0.7);
+  part(new THREE.SphereGeometry(0.009, 8, 6), HM.catCream, head, 0, -0.031, 0.028);
+  r.ears = [];
   for (const s of [-1, 1]){
-    part(new THREE.SphereGeometry(0.035, 8, 6), HM.eye, head, 0.1*s, 0.05, 0.21);
-    const ear = part(new THREE.ConeGeometry(0.085, 0.19, 4), HM.ginger, head, 0.15*s, 0.22, -0.02);
-    ear.rotation.z = ear.userData.z0 = -0.28*s;
-    (r.ears = r.ears || []).push(ear);
+    part(new THREE.SphereGeometry(0.0095, 12, 10), HM.iris, head, 0.0175*s, 0.006, 0.0345).scale.set(1, 1, 0.55);
+    part(new THREE.SphereGeometry(0.0096, 10, 8), HM.pupil, head, 0.0175*s, 0.006, 0.0358).scale.set(0.28, 0.92, 0.55);
+    part(new THREE.SphereGeometry(0.0022, 6, 4), HM.white, head, 0.0175*s + 0.003, 0.010, 0.0405);
+    const ear = joint(head, 0.024*s, 0.03, -0.006); ear.rotation.set(-0.15, 0, -0.32*s); ear.userData.z0 = -0.32*s;
+    part(new THREE.ConeGeometry(0.017, 0.032, 14), HM.catOrange, ear, 0, 0.012, 0).scale.set(1, 1, 0.55);
+    part(new THREE.ConeGeometry(0.011, 0.024, 12), HM.pink, ear, 0, 0.01, 0.004).scale.set(1, 1, 0.4);
+    r.ears.push(ear);
   }
-  // хвіст трубою: ланки від основи вгору
+  const wv = [];   // вуса
+  for (const s of [-1, 1]) for (let k = 0; k < 3; k++) wv.push(0.012*s, -0.019, 0.04, 0.062*s, -0.024 + k*0.008, 0.05 - k*0.004);
+  const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(wv, 3));
+  head.add(new THREE.LineSegments(wg, new THREE.LineBasicMaterial({ color: '#F6F2EA', transparent: true, opacity: 0.85 })));
+  r.front = []; r.hind = [];
+  for (const s of [-1, 1]){
+    const sh = joint(trunk, 0.03*s, -0.01, 0.12, 0.08);
+    part(taper(0.019, 0.014, 0.095, [[0.3, 0.019]]), HM.catLeg, sh);
+    const el = joint(sh, 0, -0.095, 0, -0.12);
+    part(taper(0.0135, 0.011, 0.085), HM.catLeg, el);
+    const pw = joint(el, 0, -0.087, 0, 0.04);
+    part(new THREE.SphereGeometry(0.0135, 12, 8), HM.catCream, pw, 0, -0.003, 0.007).scale.set(1.05, 0.55, 1.4);
+    r.front.push({ sh, el, pw });
+    const hip = joint(trunk, 0.036*s, 0.025, -0.13, -0.45);
+    part(taper(0.03, 0.017, 0.09, [[0.35, 0.028]]), HM.catLeg, hip);
+    const kn = joint(hip, 0, -0.09, 0, 1.0);
+    part(taper(0.0145, 0.0105, 0.095), HM.catLeg, kn);
+    const hk = joint(kn, 0, -0.095, 0, -0.55);
+    part(taper(0.0105, 0.009, 0.055), HM.catLeg, hk);
+    const hp = joint(hk, 0, -0.056, 0);
+    part(new THREE.SphereGeometry(0.0135, 12, 8), HM.catCream, hp, 0, -0.003, 0.008).scale.set(1.05, 0.55, 1.45);
+    r.hind.push({ hip, kn, hk });
+  }
   r.tail = [];
-  let parent = joint(body, 0, 0.75, -0.52); parent.rotation.x = -1.0;
-  for (let i = 0; i < 5; i++){
-    const seg = joint(parent, 0, i ? 0.17 : 0, 0);
-    part(new THREE.CapsuleGeometry(0.05, 0.12, 4, 8), i === 4 ? HM.gingerDark : HM.ginger, seg, 0, 0.09);
-    seg.rotation.x = i ? 0.28 : 0;
+  let parent = r.tailBase = joint(trunk, 0, 0.045, -0.19, -0.8);
+  for (let i = 0; i < 10; i++){
+    const seg = joint(parent, 0, i ? 0.031 : 0, 0, 0.13);
+    const rr = 0.0115 - i*0.0005;
+    part(taper(rr, rr - 0.0005, 0.031).rotateX(Math.PI), i >= 8 || i % 2 ? HM.catDark : HM.catOrange, seg);
     r.tail.push(seg); parent = seg;
   }
-  part(new THREE.BoxGeometry(0.34, 0.2, 0.3), M.pack, body, 0, 0.96, -0.05);        // маленький тривожний рюкзак
-  part(new THREE.BoxGeometry(0.35, 0.04, 0.12), M.body, body, 0, 1.07, -0.05);
-  return { root, scale: 2.5, cadence: [1.2, 2.0], anim: st => animQuad(r, st, { stride: 0.7, bob: 0.07 }) };
+  return { root, scale: 7.5, cadence: [1.2, 2.0], anim: st => animCat(r, st) };
+}
+function animCat(r, st){
+  const { m, idle, p, t, still } = st, A = 0.7*m;
+  // галоп-«стрибок»: передні майже разом, задні в протифазі; спина згинається
+  r.front.forEach((l, i) => {
+    const q = p + i*0.45, s = Math.sin(q);
+    l.sh.rotation.x = l.sh.userData.rx + s*A;
+    l.el.rotation.x = l.el.userData.rx + m*0.95*Math.max(0, Math.cos(q));
+    l.pw.rotation.x = l.pw.userData.rx + m*0.5*Math.max(0, Math.cos(q));
+  });
+  r.hind.forEach((l, i) => {
+    const q = p + Math.PI + i*0.45, s = Math.sin(q);
+    l.hip.rotation.x = l.hip.userData.rx + s*A*0.9;
+    l.kn.rotation.x = l.kn.userData.rx + m*0.45*Math.max(0, Math.cos(q));
+    l.hk.rotation.x = l.hk.userData.rx - m*0.35*Math.max(0, Math.cos(q));
+  });
+  const flex = 0.12*m*Math.sin(p + 0.8);
+  r.trunk.rotation.x = flex - st.bump*0.12;
+  r.body.position.y = m*0.016*Math.max(0, Math.sin(p + 1.3)) + st.hop*0.08 + (st.wave ? Math.abs(Math.sin(t*9))*0.03 : 0);
+  r.head.rotation.set(-flex*0.9 + st.bump*0.4 + (still ? 0 : idle*0.06*Math.sin(t*1.3)), still ? 0 : idle*0.5*Math.sin(t*0.5), 0);
+  r.tailBase.rotation.x = st.wave ? -0.25 : -0.8 - 0.45*m + 0.12*m*Math.sin(p);
+  r.tail.forEach((seg, i) => {
+    seg.rotation.x = st.wave ? 0.02 : 0.13 - 0.08*m + (still ? 0 : idle*0.04*Math.sin(t*1.8 - i*0.5));
+    seg.rotation.y = still ? 0 : st.wave ? Math.sin(t*30)*0.04 : Math.sin(t*(1.5 + 3*m) - i*0.55)*(0.07 + 0.05*m);
+  });
+  r.ears.forEach((e, i) => { e.rotation.z = e.userData.z0 + (still ? 0 : idle*0.25*Math.pow(Math.max(0, Math.sin(t*0.8 + i*2.1)), 12)); });
 }
 
+// пекінес ~30 см: довга шерсть шарами, пишна грива, пласка морда з чорною маскою, вуха з бахромою, хвіст-пір'їна на спину
 function buildPeke(){
   const root = new THREE.Group(), r = {};
   const body = r.body = joint(root);
-  part(new THREE.SphereGeometry(0.38, 18, 14), HM.peke, body, 0, 0.48, -0.02).scale.set(1, 0.82, 1.3);
-  part(new THREE.SphereGeometry(0.33, 16, 12), HM.pekeLight, body, 0, 0.52, 0.3).scale.set(1.05, 0.95, 0.8);  // пишна грива
-  part(new THREE.TorusGeometry(0.21, 0.035, 8, 20), M.body, body, 0, 0.66, 0.42).rotation.x = Math.PI/2.3;   // жовтий нашийник
-  quadLegs(r, body, HM.peke, HM.pekeLight, 0.19, 0.27, 0.3, 0.085, 0.12);
-  const head = r.head = joint(body, 0, 0.78, 0.5);
-  part(new THREE.SphereGeometry(0.29, 18, 14), HM.peke, head).scale.set(1.12, 0.95, 0.92);
-  part(new THREE.SphereGeometry(0.17, 14, 10), HM.mask, head, 0, -0.05, 0.19).scale.set(1.15, 0.85, 0.5);    // пласка мордочка
-  part(new THREE.SphereGeometry(0.045, 8, 6), HM.eye, head, 0, -0.02, 0.28);
-  for (const s of [-1, 1]){
-    part(new THREE.SphereGeometry(0.045, 10, 8), HM.eye, head, 0.11*s, 0.06, 0.22);
-    const ear = part(new THREE.SphereGeometry(0.15, 12, 10), HM.pekeEar, head, 0.27*s, -0.06, -0.02);
-    ear.scale.set(0.5, 1.25, 0.85); ear.rotation.z = ear.userData.z0 = 0.15*s;
-    (r.ears = r.ears || []).push(ear);
+  const trunk = r.trunk = joint(body, 0, 0.135, 0);
+  const torso = part(latheZ([[0, -0.15], [0.05, -0.145], [0.078, -0.12], [0.09, -0.07], [0.095, -0.01], [0.095, 0.05], [0.085, 0.1], [0.06, 0.135], [0, 0.15]]), HM.pekeBase, trunk);
+  torso.scale.set(0.95, 0.9, 1); fur(torso, FUR.body);
+  const mane = part(new THREE.SphereGeometry(0.085, 24, 16), HM.pekeBase, trunk, 0, 0.035, 0.1); mane.scale.set(1.12, 1.05, 0.9); fur(mane, FUR.mane);
+  part(new THREE.TorusGeometry(0.06, 0.007, 8, 26), HM.collar, trunk, 0, 0.055, 0.14).rotation.x = Math.PI/2 - 0.35;
+  r.legs = [];
+  for (const [x, z] of [[-0.048, 0.09], [0.048, 0.09], [-0.052, -0.09], [0.052, -0.09]]){
+    const j = joint(trunk, x, -0.06, z);
+    const leg = part(taper(0.022, 0.018, 0.055), HM.pekeBase, j); fur(leg, FUR.leg);
+    part(new THREE.SphereGeometry(0.018, 12, 8), HM.pekeBase, j, 0, -0.068, 0.008).scale.set(1, 0.6, 1.3);
+    r.legs.push(j);
   }
-  // хвіст-пір’їна, закручений на спину
+  const head = r.head = joint(trunk, 0, 0.075, 0.165);
+  const skull = part(new THREE.SphereGeometry(0.062, 24, 18), HM.pekeBase, head); skull.scale.set(1.18, 0.95, 0.9); fur(skull, FUR.head);
+  part(new THREE.SphereGeometry(0.042, 18, 12), HM.mask, head, 0, -0.012, 0.047).scale.set(1.22, 0.88, 0.4);
+  part(new THREE.SphereGeometry(0.011, 10, 8), HM.nose, head, 0, 0.0, 0.064).scale.set(1.5, 1, 0.8);
+  part(new THREE.TorusGeometry(0.02, 0.006, 6, 14, Math.PI), HM.pekeBase, head, 0, 0.012, 0.058);   // складка над носом
+  for (const s of [-1, 1]){
+    part(new THREE.SphereGeometry(0.0125, 12, 10), HM.eye, head, 0.03*s, 0.017, 0.05);
+    part(new THREE.SphereGeometry(0.0032, 6, 4), HM.white, head, 0.03*s + 0.004, 0.022, 0.061);
+  }
+  r.ears = [];
+  for (const s of [-1, 1]){
+    const ej = joint(head, 0.058*s, 0.028, -0.01); ej.userData.z0 = 0.1*s; ej.rotation.z = ej.userData.z0;
+    const ear = part(new THREE.SphereGeometry(0.03, 16, 12), HM.pekeBase, ej, 0, -0.03, 0); ear.scale.set(0.5, 1.5, 0.85); fur(ear, FUR.ear);
+    r.ears.push(ej);
+  }
   r.tail = [];
-  let parent = joint(body, 0, 0.62, -0.42); parent.rotation.x = -0.35;
+  let parent = r.tailBase = joint(trunk, 0, 0.06, -0.13, -0.4);
   for (let i = 0; i < 3; i++){
-    const seg = joint(parent, 0, i ? 0.16 : 0, 0);
-    part(new THREE.SphereGeometry(0.14 - i*0.02, 12, 10), i ? HM.pekeLight : HM.peke, seg, 0, 0.1).scale.set(1.2, 1, 1);
-    seg.rotation.x = i ? 0.9 : 0;
+    const seg = joint(parent, 0, i ? 0.045 : 0, 0, i ? 0.8 : 0);
+    const sp = part(new THREE.SphereGeometry(0.035 - i*0.005, 16, 12), HM.pekeBase, seg, 0, 0.025, 0); sp.scale.set(1.1, 1.4, 1); fur(sp, FUR.tail);
     r.tail.push(seg); parent = seg;
   }
-  return { root, scale: 3.0, cadence: [1.4, 2.4], anim: st => animQuad(r, st, { stride: 0.75, bob: 0.06, waddle: 0.08 }) };
+  return { root, scale: 11, cadence: [1.6, 2.8], anim: st => animPeke(r, st) };
+}
+function animPeke(r, st){
+  const { m, idle, p, t, still } = st, s = Math.sin(p), A = 0.65*m;
+  // дрібна рись короткими лапками, перевалка тулубом, вуха підстрибують
+  r.legs[0].rotation.x = -s*A; r.legs[3].rotation.x = -s*A;
+  r.legs[1].rotation.x =  s*A; r.legs[2].rotation.x =  s*A;
+  r.body.position.y = m*Math.abs(Math.cos(p))*0.01 + st.hop*0.06 + (st.wave ? Math.abs(Math.sin(t*9))*0.025 : 0);
+  r.trunk.rotation.set(-st.bump*0.12, 0, 0.07*m*s);
+  r.head.rotation.set(-0.05*m + st.bump*0.4 + (still ? 0 : idle*0.05*Math.sin(t*1.3)), still ? 0 : idle*0.5*Math.sin(t*0.5), -0.04*m*s);
+  r.ears.forEach((e, i) => { e.rotation.x = (still ? 0 : 0.25*m*Math.abs(Math.cos(p))); e.rotation.z = e.userData.z0 + (i ? 1 : -1)*0.15*m*Math.abs(Math.sin(p)); });
+  const wag = still ? 0 : st.wave ? Math.sin(t*24)*0.35 : Math.sin(t*(2 + 5*m))*(0.12 + 0.12*m);
+  r.tailBase.rotation.set(-0.4, wag, 0);
 }
 
 const SKINS = [
-  { id: 'human', name: 'Людина', note: 'Жовта куртка й тривожний рюкзак', need: 0, build: () => buildHuman({ jacket: M.body, strip: HM.strip, hat: 'cap' }) },
-  { id: 'cat', name: 'Котик', note: 'Рудий, з маленьким рюкзачком', need: 4, build: buildCat },
-  { id: 'peke', name: 'Пекінес', note: 'Пухнастий, у жовтому нашийнику', need: 9, build: buildPeke },
-  { id: 'eng', name: 'Інженер', note: 'Каска й світловідбивна смуга', need: 15, build: () => buildHuman({ jacket: HM.steel, strip: M.body, hat: 'hardhat' }) },
+  { id: 'human', name: 'Людина', note: 'Жовта куртка, джинси, тривожний рюкзак', need: 0, build: () => buildHuman({ jacket: HM.jacket, pants: HM.jeans, shoe: HM.shoe, sole: HM.sole, hat: 'cap' }) },
+  { id: 'cat', name: 'Котик', note: 'Рудий таббі в жовтому нашийнику', need: 4, build: buildCat },
+  { id: 'peke', name: 'Пекінес', note: 'Довга шерсть і пласка мордочка', need: 9, build: buildPeke },
+  { id: 'eng', name: 'Інженер', note: 'Каска, жилет і креслення в руці', need: 15, build: () => buildHuman({ jacket: HM.shirt, pants: HM.work, shoe: HM.boot, sole: HM.boot, hat: 'hardhat', vest: true }) },
 ];
 const archTotal = () => Object.values(saved.best).reduce((a, b) => a + ((b && b.s) | 0), 0);
 const unlocked = sk => archTotal() >= sk.need;
@@ -829,8 +1004,8 @@ function animateFigure(dt, now){
 
 // мініатюри для вибору: кожен персонаж у кроці, кадр з основного полотна
 const thumbs = {}, sils = {};
-function renderThumbs(){
-  const size = 160, dpr = renderer.getPixelRatio(), cv = renderer.domElement;
+function renderThumbs(size = 160){
+  const dpr = renderer.getPixelRatio(), cv = renderer.domElement;
   const bg = new THREE.Color(T.tint || '#ECE9E2'), ps = new THREE.Scene(); ps.background = bg;
   const bgRGB = bg.clone().convertLinearToSRGB(), br = bgRGB.r*255, bgG = bgRGB.g*255, bb = bgRGB.b*255, sil = new THREE.Color(T.muted || '#5A6467').convertLinearToSRGB();
   ps.add(new THREE.HemisphereLight('#ffffff', '#8d8a83', 1.7));
