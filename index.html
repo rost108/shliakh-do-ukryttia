@@ -122,6 +122,9 @@ button:disabled{cursor:default;opacity:.6}
 .loading{position:absolute;inset:0;display:grid;place-items:center;padding:24px;font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:center}
 .toast{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);background:var(--ink);color:var(--paper);font-family:var(--f-mono);font-size:12px;line-height:1.4;letter-spacing:.03em;padding:8px 12px;border-radius:8px;pointer-events:none;opacity:0;transition:opacity .25s;text-align:center;text-wrap:balance}
 .toast.show{opacity:1}
+.buffs{position:absolute;top:10px;left:10px;display:flex;flex-direction:column;gap:5px;pointer-events:none;max-width:60%}
+.buff{display:flex;align-items:center;gap:7px;width:max-content;max-width:100%;background:var(--ink);color:var(--paper);font-family:var(--f-mono);font-size:11px;letter-spacing:.04em;padding:5px 10px 5px 6px;border-radius:999px}
+.buff i{width:14px;height:14px;border-radius:50%;flex:none;border:1.5px solid var(--paper)}
 .stage.with-pad .toast{bottom:auto;top:12px;left:12px;transform:none;max-width:calc(100% - 120px);text-align:left}
 
 .bar{display:flex;align-items:center;gap:10px;padding-block:8px 10px;font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -199,6 +202,9 @@ h2{font-size:clamp(30px,9vw,40px)}
 .arches .on svg{fill:var(--accent);stroke:var(--accent)}
 .arches figcaption{font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .arches .on figcaption{color:var(--ink)}
+.arches .bolt{margin-left:auto}
+.arches .bolt svg{width:37px;stroke-width:.09}
+.arches .bolt.on svg{fill:#2F7D4F;stroke:#2F7D4F}
 .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0}
 .stats>div{border-top:1px solid var(--line);padding-top:8px;display:flex;flex-direction:column;gap:4px;min-width:0}
 .stats dt{font-family:var(--f-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
@@ -268,6 +274,7 @@ h2{font-size:clamp(30px,9vw,40px)}
     <div id="gl"></div>
     <canvas class="mini" id="mini" aria-label="Мапа розвіданих вулиць" role="img"></canvas>
     <div class="loading" id="loading">Завантажую 3D…</div>
+    <div class="buffs" id="buffs" aria-live="polite"></div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <div class="pad" id="pad" hidden>
       <button data-dir="N" aria-label="Вгору"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button>
@@ -313,6 +320,10 @@ h2{font-size:clamp(30px,9vw,40px)}
           <span class="glyph"><svg viewBox="0 0 79 56" style="width:24px;height:17px"><use href="#dome" fill="#FCDE00"/></svg></span>
           <span><b>Три арки з трьох</b> за укриття, норматив часу і повну валізку.</span>
         </li>
+        <li>
+          <span class="glyph"><svg viewBox="-1 -1 2 2" style="width:20px;height:20px"><path d="M.15-.95-.45.1H-.02L-.2.95.45-.15H.02Z" fill="#2F7D4F"/></svg></span>
+          <span><b>Плюшки на вулицях</b> підбирай на ходу: швидкий крок, план району, компас, секундомір і рація.</span>
+        </li>
       </ul>
       <div class="actions">
         <button class="btn" id="startBtn" disabled>Завантажую…</button>
@@ -336,6 +347,7 @@ h2{font-size:clamp(30px,9vw,40px)}
         <figure><svg viewBox="0 0 79 56" aria-hidden="true"><use href="#dome"/></svg><figcaption>Укриття</figcaption></figure>
         <figure><svg viewBox="0 0 79 56" aria-hidden="true"><use href="#dome"/></svg><figcaption>Норматив</figcaption></figure>
         <figure><svg viewBox="0 0 79 56" aria-hidden="true"><use href="#dome"/></svg><figcaption>Валізка</figcaption></figure>
+        <figure class="bolt"><svg viewBox="-1.05 -1.05 2.1 2.1" aria-hidden="true"><path d="M.15-.95-.45.1H-.02L-.2.95.45-.15H.02Z"/></svg><figcaption>Блискавка</figcaption></figure>
       </div>
       <div class="unlock" id="wUnlock" hidden>
         <img id="wUnlockImg" alt="">
@@ -367,7 +379,7 @@ h2{font-size:clamp(30px,9vw,40px)}
       <div class="head">
         <p class="eyebrow" id="skEyebrow">Персонаж</p>
         <h2 id="skinsTitle">Хто біжить до укриття</h2>
-        <p class="model">Арки за рівні відкривають нових персонажів. Вкладайся в норматив і збирай тривожну валізку — так арок більше.</p>
+        <p class="model">Арки за рівні й блискавки за швидкість відкривають нових персонажів. Блискавка — рівень, пройдений удвічі швидше за норматив.</p>
       </div>
       <div class="skins" id="skinGrid"></div>
       <div class="actions"><button class="btn" id="skinsDone">Готово</button></div>
@@ -408,6 +420,14 @@ const KEYS = ['N','E','S','W'];
 const BIT = {1:'N',2:'E',4:'S',8:'W'};
 const DEG = [0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4];
 const KIT = { docs:'Документи', water:'Вода', light:'Ліхтарик', aid:'Аптечка', power:'Павербанк' };
+// плюшки на вулицях: підбираються на ходу; розкладка залежить лише від номера рівня — однакова для всіх гравців
+const BUFF = {
+  speed:   { name: 'Швидкий крок', note: 'біг швидший 6 с', color: '#2F7D4F', ink: '#FFFFFF', ms: 6000 },
+  map:     { name: 'План району', note: 'мапа в куті відкрита', color: '#2F6F8F', ink: '#FFFFFF', ms: 0 },
+  compass: { name: 'Компас', note: 'шлях до укриття видно 8 с', color: '#D9772B', ink: '#FFFFFF', ms: 8000 },
+  time:    { name: 'Секундомір', note: 'час стоїть 10 с', color: '#5F6B6E', ink: '#FFFFFF', ms: 10000 },
+  radio:   { name: 'Рація', note: 'уся валізка на мапі', color: '#23272A', ink: '#FCDE00', ms: 0 },
+};
 
 // Факти — лише з data/proof_points.md
 const FACTS = [
@@ -507,7 +527,12 @@ function buildMaze(level, aspect, dark){
   for (const [c] of items){ detour += 2*B.d[c]; detourStops += 2*Math.ceil(B.d[c]/3); }
   const par = Math.ceil(1.6*(2 + (A.d[exit] + detour)/SPEED + (stops + detourStops)*0.9) + n*0.05);
 
-  return Object.assign(m, { start, exit, dist:A.d[exit], par, items });
+  const nb = level < 2 ? 0 : level < 8 ? 1 : level < 16 ? 2 : 3, used = new Set([start, exit, ...items.map(it => it[0])]), cand = [];
+  for (let i = 0; i < n; i++) if (!used.has(i) && A.d[i] >= 4 && DEG[open[i]] >= 2) cand.push(i);
+  shuffle(cand, R);
+  const btypes = shuffle(Object.keys(BUFF), R), buffs = [];
+  for (let k = 0; k < nb && k < cand.length; k++) buffs.push([cand[k], btypes[k % btypes.length]]);
+  return Object.assign(m, { start, exit, dist:A.d[exit], par, items, buffs });
 }
 
 function slidePath(from, k){
@@ -613,6 +638,27 @@ function glyph(g, k){
   }
   g.stroke();
 }
+function buffGlyph(g, k){
+  g.beginPath();
+  if (k === 'speed'){ g.moveTo(0.15, -0.95); g.lineTo(-0.45, 0.1); g.lineTo(-0.02, 0.1); g.lineTo(-0.2, 0.95); g.lineTo(0.45, -0.15); g.lineTo(0.02, -0.15); g.closePath(); g.fill(); return; }
+  if (k === 'map'){ g.moveTo(-0.85, -0.6); g.lineTo(-0.3, -0.8); g.lineTo(0.3, -0.6); g.lineTo(0.85, -0.8); g.lineTo(0.85, 0.6); g.lineTo(0.3, 0.8); g.lineTo(-0.3, 0.6); g.lineTo(-0.85, 0.8); g.closePath(); g.moveTo(-0.3, -0.8); g.lineTo(-0.3, 0.6); g.moveTo(0.3, -0.6); g.lineTo(0.3, 0.8); }
+  else if (k === 'compass'){ g.arc(0, 0, 0.85, 0, Math.PI*2); g.moveTo(0, -0.6); g.lineTo(0.22, 0); g.lineTo(0, 0.6); g.lineTo(-0.22, 0); g.closePath(); }
+  else if (k === 'time'){ g.arc(0, 0.1, 0.72, 0, Math.PI*2); g.moveTo(0, 0.1); g.lineTo(0, -0.35); g.moveTo(0, 0.1); g.lineTo(0.3, 0.3); g.moveTo(-0.18, -0.85); g.lineTo(0.18, -0.85); g.moveTo(0, -0.85); g.lineTo(0, -0.62); }
+  else if (k === 'radio'){ g.rect(-0.4, -0.45, 0.8, 1.35); g.moveTo(0.25, -0.45); g.lineTo(0.25, -0.95); for (const y of [-0.15, 0.1, 0.35]){ g.moveTo(-0.2, y); g.lineTo(0.2, y); } }
+  g.stroke();
+}
+const buffMat = {};
+for (const [k, b] of Object.entries(BUFF)){
+  const tex = canvasTex(128, 128, (g, w) => {
+    g.fillStyle = b.color; g.fillRect(0, 0, w, w);
+    g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 6; g.beginPath(); g.arc(w/2, w/2, w/2 - 8, 0, Math.PI*2); g.stroke();
+    g.translate(w/2, w/2); g.scale(30, 30); g.lineWidth = 7/30; g.lineJoin = 'round'; g.lineCap = 'round'; g.strokeStyle = g.fillStyle = b.ink;
+    buffGlyph(g, k);
+  });
+  const side = new THREE.MeshStandardMaterial({ color: b.color, roughness: 0.4, metalness: 0.2 });
+  const cap = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.45, emissive: b.color, emissiveIntensity: 0.25 });
+  buffMat[k] = { coin: [side, cap, cap], glow: new THREE.MeshBasicMaterial({ color: b.color, transparent: true, opacity: 0.32, depthWrite: false }) };
+}
 const itemMat = {};
 for (const k of Object.keys(KIT)){
   const tex = canvasTex(128, 128, (g, w) => {
@@ -647,6 +693,8 @@ const GEO = {
   post: new THREE.BoxGeometry(WALL_T, WALL_H, WALL_T).translate(0, WALL_H/2, 0),
   dot: new THREE.CircleGeometry(0.45, 14).rotateX(-Math.PI/2),
   item: new THREE.BoxGeometry(1.9, 1.9, 1.9),
+  coin: new THREE.CylinderGeometry(1.2, 1.2, 0.3, 32).rotateX(Math.PI/2),
+  glow: new THREE.CircleGeometry(1.6, 28).rotateX(-Math.PI/2),
 };
 
 // «Фортеця 3,5» з CAD: head (0…3,15 м) + tail (10,2…15,33 м, зсув −7,05 м) = 3 секції, 8,28 м
@@ -788,6 +836,9 @@ const HM = {
   pink: std('#E39CA2', 0.6), iris: std('#9DBA3B', 0.2), pupil: std('#0B0B0B', 0.15), white: std('#FFFFFF', 0.1),
   collar: std('#FCDE00', 0.5),
   pekeBase: std('#9A5E2A', 1), mask: std('#2A1D16', 0.85), nose: std('#121212', 0.3),
+  sport: std('#1E9C8F', 0.75), leggings: std('#24282C', 0.85), sneaker: std('#F06A4A', 0.6), blonde: std('#C9A15A', 0.85), band: std('#F06A4A', 0.6),
+  dogTan: std('#C58A4A', 0.92), dogDark: std('#2E2219', 0.9), dogTail: std('#5A3E26', 0.92), dogEye: std('#6B3F12', 0.3),
+  hedgeSkin: std('#8A7462', 0.9), hedgeFace: std('#CDB79C', 0.85),
 };
 const FUR = {
   body: { mats: furSet('#9A5E2A', '#EDCB93', 12), len: 0.03, droop: 0.024 },
@@ -816,12 +867,13 @@ function buildHuman(o){
   }
   const spine = r.spine = joint(hips, 0, 0.07, 0);
   const torsoPts = [[0, -0.03], [0.128, 0], [0.134, 0.05], [0.15, 0.15], [0.165, 0.26], [0.162, 0.33], [0.14, 0.385], [0.09, 0.425], [0.05, 0.445], [0, 0.45]];
-  part(lathe(torsoPts, 28), o.jacket, spine).scale.set(1.22, 1, 0.74);
+  const TX = o.torsoX || 1.22;
+  part(lathe(torsoPts, 28), o.jacket, spine).scale.set(TX, 1, 0.74);
   if (o.vest){
     part(lathe(torsoPts.map(([a, b]) => [a*1.06, b]).slice(0, 7), 28), HM.vest, spine, 0, 0.005).scale.set(1.22, 1, 0.76);
     for (const y of [0.12, 0.22]) part(new THREE.CylinderGeometry(0.168, 0.168, 0.022, 28, 1, true), HM.strip, spine, 0, y).scale.set(1.23, 1, 0.78);
   } else {
-    part(new THREE.CylinderGeometry(0.163, 0.163, 0.026, 28, 1, true), HM.strip, spine, 0, 0.2).scale.set(1.23, 1, 0.77);
+    part(new THREE.CylinderGeometry(0.163, 0.163, 0.026, 28, 1, true), HM.strip, spine, 0, 0.2).scale.set(TX + 0.01, 1, 0.77);
     part(new THREE.BoxGeometry(0.008, 0.34, 0.01), HM.zip, spine, 0, 0.2, 0.121);
     part(new THREE.TorusGeometry(0.07, 0.03, 10, 20, Math.PI*1.2), o.jacket, spine, 0, 0.42, -0.03).rotation.set(Math.PI/2 - 0.35, 0, Math.PI*0.9);   // капюшон
   }
@@ -852,17 +904,22 @@ function buildHuman(o){
     part(new THREE.SphereGeometry(0.022, 10, 8), HM.skin, head, 0.079*s, 0.105, 0).scale.set(0.4, 1.1, 0.8);     // вуха
   }
   // волосся: півсфера, нахилена назад — відкриває лоб, закриває потилицю
-  const hair = part(new THREE.SphereGeometry(0.104, 24, 14, 0, Math.PI*2, 0, Math.PI/2), HM.hair, head, 0, 0.105, -0.008);
+  const hair = part(new THREE.SphereGeometry(0.104, 24, 14, 0, Math.PI*2, 0, Math.PI/2), o.hairMat || HM.hair, head, 0, 0.105, -0.008);
   hair.scale.set(0.83, 1.08, 1.0); hair.rotation.x = -0.55;
   if (o.hat === 'hardhat'){
     part(new THREE.SphereGeometry(0.112, 22, 12, 0, Math.PI*2, 0, Math.PI/2), HM.helmet, head, 0, 0.15, 0).scale.set(0.95, 0.95, 1.08);
     part(new THREE.CylinderGeometry(0.14, 0.14, 0.012, 26), HM.helmet, head, 0, 0.152, 0.012).scale.set(0.92, 1, 1.12);
     part(new THREE.BoxGeometry(0.025, 0.03, 0.2), HM.helmet, head, 0, 0.255, 0);
-  } else {
+  } else if (o.hat !== 'none'){
     part(new THREE.SphereGeometry(0.104, 22, 12, 0, Math.PI*2, 0, Math.PI/2), HM.cap, head, 0, 0.15, 0).scale.set(0.86, 0.9, 1);
     part(new THREE.CylinderGeometry(0.075, 0.075, 0.01, 20, 1, false, -Math.PI/2, Math.PI), HM.cap, head, 0, 0.152, 0.07).scale.set(1, 1, 0.95);   // козирок
   }
-  if (!o.vest){   // тривожний рюкзак на лямках
+  if (o.hair === 'ponytail'){   // хвостик і пов'язка
+    const pt = r.pony = joint(head, 0, 0.165, -0.085, 0.5);
+    part(new THREE.CapsuleGeometry(0.028, 0.13, 4, 10), o.hairMat || HM.hair, pt, 0, -0.075, 0);
+    part(new THREE.TorusGeometry(0.085, 0.011, 8, 28), HM.band, head, 0, 0.14, 0).rotation.x = Math.PI/2 - 0.25;
+  }
+  if (!o.vest && o.pack !== false){   // тривожний рюкзак на лямках
     part(new THREE.CapsuleGeometry(0.1, 0.16, 6, 14), HM.pack, spine, 0, 0.25, -0.175).scale.set(1.45, 1, 0.62);
     part(new THREE.BoxGeometry(0.2, 0.03, 0.012), M.body, spine, 0, 0.33, -0.24);
     for (const s of [-1, 1]) part(new THREE.BoxGeometry(0.026, 0.13, 0.008), HM.pack, spine, 0.105*s, 0.36, 0.1).rotation.set(-0.5, 0, 0.1*s);   // лямки лише на плечах
@@ -887,6 +944,7 @@ function animHuman(r, st){
   r.spine.scale.y = 1 + (still ? 0 : idle*0.01*Math.sin(t*2.2));
   r.neck.rotation.set(-0.1*m, -s*0.2*m + (still ? 0 : idle*0.28*Math.sin(t*0.55)), 0);
   if (st.wave){ r.shR.rotation.set(0, 0, 2.75 + 0.25*Math.sin(t*13)); r.elR.rotation.set(-0.25, 0, 0); }   // махає на порозі
+  if (r.pony) r.pony.rotation.set(0.5 + m*0.3*Math.abs(Math.sin(p)), 0, still ? 0 : Math.sin(p)*0.3*m + idle*0.05*Math.sin(t*1.2));
 }
 
 // рудий таббі ~45 см без хвоста: передні лапи з ліктем, задні — стегно, коліно, «п'ята»; хвіст із 10 ланок
@@ -963,11 +1021,12 @@ function animCat(r, st){
   });
   const flex = 0.12*m*Math.sin(p + 0.8);
   r.trunk.rotation.x = flex - st.bump*0.12;
-  r.body.position.y = m*0.016*Math.max(0, Math.sin(p + 1.3)) + st.hop*0.08 + (st.wave ? Math.abs(Math.sin(t*9))*0.03 : 0);
+  const f = r.f || 1, tc = r.tailCfg || [-0.8, -1.25, 0.13, 0.05, -0.25];
+  r.body.position.y = f*(m*0.016*Math.max(0, Math.sin(p + 1.3)) + st.hop*0.08 + (st.wave ? Math.abs(Math.sin(t*9))*0.03 : 0));
   r.head.rotation.set(-flex*0.9 + st.bump*0.4 + (still ? 0 : idle*0.06*Math.sin(t*1.3)), still ? 0 : idle*0.5*Math.sin(t*0.5), 0);
-  r.tailBase.rotation.x = st.wave ? -0.25 : -0.8 - 0.45*m + 0.12*m*Math.sin(p);
+  r.tailBase.rotation.x = st.wave ? tc[4] : tc[0] + (tc[1] - tc[0])*m + 0.12*m*Math.sin(p);
   r.tail.forEach((seg, i) => {
-    seg.rotation.x = st.wave ? 0.02 : 0.13 - 0.08*m + (still ? 0 : idle*0.04*Math.sin(t*1.8 - i*0.5));
+    seg.rotation.x = st.wave ? 0.02 : tc[2] + (tc[3] - tc[2])*m + (still ? 0 : idle*0.04*Math.sin(t*1.8 - i*0.5));
     seg.rotation.y = still ? 0 : st.wave ? Math.sin(t*30)*0.04 : Math.sin(t*(1.5 + 3*m) - i*0.55)*(0.07 + 0.05*m);
   });
   r.ears.forEach((e, i) => { e.rotation.z = e.userData.z0 + (still ? 0 : idle*0.25*Math.pow(Math.max(0, Math.sin(t*0.8 + i*2.1)), 12)); });
@@ -1026,15 +1085,123 @@ function animPeke(r, st){
   r.tailBase.rotation.set(-0.4, wag, 0);
 }
 
+// службова вівчарка ~1 м: рудо-підпалий окрас із чорним «чепраком», стоячі вуха, пухнастий хвіст донизу
+const shepherdTex = canvasTex(512, 256, (g, w, h) => {
+  const R = rng(31);
+  g.fillStyle = '#C58A4A'; g.fillRect(0, 0, w, h);
+  g.save(); g.translate(w*0.5, h*0.5); g.scale(w*0.3, h*0.42);
+  const gr = g.createRadialGradient(0, 0, 0.55, 0, 0, 1);
+  gr.addColorStop(0, 'rgba(34,26,20,1)'); gr.addColorStop(1, 'rgba(34,26,20,0)');
+  g.fillStyle = gr; g.beginPath(); g.arc(0, 0, 1, 0, Math.PI*2); g.fill(); g.restore();
+  for (let i = 0; i < 9000; i++){
+    const x = R()*w, y = R()*h, l = 2 + R()*5;
+    g.strokeStyle = R() < 0.5 ? 'rgba(255,230,190,.10)' : 'rgba(40,25,10,.12)'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + (R() - 0.5), y + l); g.stroke();
+  }
+});
+function buildDog(){
+  const root = new THREE.Group(), r = { f: 2.6, tailCfg: [-2.55, -2.0, 0.1, 0.06, -1.3] };
+  const body = r.body = joint(root);
+  const trunk = r.trunk = joint(body, 0, 0.52, 0);
+  const coat = std('#ffffff', 0.92, { map: shepherdTex });
+  part(latheZ([[0, -0.42], [0.08, -0.41], [0.13, -0.36], [0.15, -0.25], [0.155, -0.1], [0.16, 0.05], [0.165, 0.18], [0.155, 0.28], [0.12, 0.36], [0.06, 0.41], [0, 0.42]]), coat, trunk).scale.set(0.78, 1.05, 1);
+  part(new THREE.SphereGeometry(0.1, 18, 14), HM.dogTan, trunk, 0, 0.12, 0.38).scale.set(0.85, 1.25, 1.2);   // шия
+  part(new THREE.TorusGeometry(0.085, 0.012, 8, 26), HM.collar, trunk, 0, 0.13, 0.4).rotation.x = Math.PI/2 - 0.6;
+  const head = r.head = joint(trunk, 0, 0.27, 0.48);
+  part(new THREE.SphereGeometry(0.1, 22, 16), HM.dogTan, head).scale.set(1, 0.92, 1.05);
+  part(taper(0.055, 0.035, 0.14).rotateX(-Math.PI/2), HM.dogDark, head, 0, -0.03, 0.07);                  // морда
+  part(new THREE.SphereGeometry(0.022, 10, 8), HM.nose, head, 0, -0.022, 0.235).scale.set(1.2, 0.85, 0.9);
+  r.ears = [];
+  for (const s of [-1, 1]){
+    part(new THREE.SphereGeometry(0.014, 10, 8), HM.dogEye, head, 0.045*s, 0.03, 0.085);
+    const ear = joint(head, 0.055*s, 0.085, -0.02); ear.rotation.set(-0.1, 0, -0.18*s); ear.userData.z0 = -0.18*s;
+    part(new THREE.ConeGeometry(0.045, 0.13, 14), HM.dogDark, ear, 0, 0.055, 0).scale.set(1, 1, 0.45);
+    r.ears.push(ear);
+  }
+  r.front = []; r.hind = [];
+  for (const s of [-1, 1]){
+    const sh = joint(trunk, 0.07*s, -0.04, 0.27, 0.05);
+    part(taper(0.045, 0.035, 0.24, [[0.3, 0.046]]), HM.dogTan, sh);
+    const el = joint(sh, 0, -0.24, 0, -0.1);
+    part(taper(0.03, 0.026, 0.22), HM.dogTan, el);
+    const pw = joint(el, 0, -0.225, 0, 0.03);
+    part(new THREE.SphereGeometry(0.033, 12, 8), HM.dogTan, pw, 0, -0.004, 0.012).scale.set(1, 0.55, 1.35);
+    r.front.push({ sh, el, pw });
+    const hip = joint(trunk, 0.075*s, 0.02, -0.33, -0.45);
+    part(taper(0.07, 0.04, 0.22, [[0.3, 0.068]]), coat, hip);
+    const kn = joint(hip, 0, -0.22, 0, 1.0);
+    part(taper(0.033, 0.025, 0.22), HM.dogTan, kn);
+    const hk = joint(kn, 0, -0.22, 0, -0.55);
+    part(taper(0.025, 0.022, 0.13), HM.dogTan, hk);
+    const hp = joint(hk, 0, -0.132, 0);
+    part(new THREE.SphereGeometry(0.033, 12, 8), HM.dogTan, hp, 0, -0.004, 0.012).scale.set(1, 0.55, 1.35);
+    r.hind.push({ hip, kn, hk });
+  }
+  r.tail = [];
+  let parent = r.tailBase = joint(trunk, 0, 0.06, -0.41, -2.55);
+  for (let i = 0; i < 6; i++){
+    const seg = joint(parent, 0, i ? 0.07 : 0, 0, 0.1);
+    const rr = 0.045 - i*0.003;
+    part(taper(rr, rr - 0.003, 0.07).rotateX(Math.PI), i > 3 ? HM.dogDark : HM.dogTail, seg);
+    r.tail.push(seg); parent = seg;
+  }
+  return { root, scale: 3.4, cadence: [1.1, 1.7], anim: st => animCat(r, st) };
+}
+
+// їжачок ~25 см: колючки поверх спини (окремими конусами), світла мордочка-рильце, дрібні лапки
+function buildHedgehog(){
+  const root = new THREE.Group(), r = { ears: [] };
+  const body = r.body = joint(root);
+  const trunk = r.trunk = joint(body, 0, 0.07, 0);
+  part(new THREE.SphereGeometry(0.1, 24, 16), HM.hedgeSkin, trunk).scale.set(0.85, 0.62, 1.25);
+  const N = 420, cone = new THREE.ConeGeometry(0.0075, 0.055, 5).translate(0, 0.0275, 0);
+  const spines = new THREE.InstancedMesh(cone, std('#ffffff', 0.75), N);
+  const up = new THREE.Vector3(0, 1, 0), nrm = new THREE.Vector3(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1), mx = new THREE.Matrix4(), col = new THREE.Color(), R = rng(77), ga = Math.PI*(3 - Math.sqrt(5));
+  let k = 0;
+  for (let i = 0; i < 1100 && k < N; i++){
+    const y = 1 - (i/1099)*2, rr = Math.sqrt(1 - y*y), th = ga*i, x = Math.cos(th)*rr, z = Math.sin(th)*rr;
+    if (y < -0.05 || z > 0.7) continue;          // лише спина й боки, не рильце й черево
+    pos.set(x*0.085, y*0.062, z*0.125);
+    nrm.set(x/0.085, y/0.062, z/0.125).normalize(); nrm.z -= 0.55; nrm.normalize();   // голки лягають назад
+    q.setFromUnitVectors(up, nrm); mx.compose(pos, q, one);
+    spines.setMatrixAt(k, mx); spines.setColorAt(k, col.set(R() < 0.3 ? '#D9CBB4' : '#4A3A2E')); k++;
+  }
+  spines.count = k; spines.castShadow = true; trunk.add(spines);
+  const head = r.head = joint(trunk, 0, -0.005, 0.1);
+  part(taper(0.032, 0.012, 0.075).rotateX(-Math.PI/2), HM.hedgeFace, head);
+  part(new THREE.SphereGeometry(0.009, 8, 6), HM.nose, head, 0, 0, 0.088);
+  for (const s of [-1, 1]){
+    part(new THREE.SphereGeometry(0.0075, 8, 6), HM.eye, head, 0.022*s, 0.016, 0.022);
+    part(new THREE.SphereGeometry(0.011, 8, 6), HM.hedgeFace, head, 0.034*s, 0.03, -0.004).scale.set(1, 1, 0.5);
+  }
+  r.legs = [];
+  for (const [x, z] of [[-0.05, 0.06], [0.05, 0.06], [-0.05, -0.06], [0.05, -0.06]]){
+    const j = joint(trunk, x, -0.035, z);
+    part(taper(0.012, 0.01, 0.025), HM.hedgeSkin, j);
+    part(new THREE.SphereGeometry(0.011, 8, 6), HM.hedgeSkin, j, 0, -0.035, 0.004).scale.set(1, 0.55, 1.3);
+    r.legs.push(j);
+  }
+  r.tailBase = joint(trunk);
+  return { root, scale: 12, cadence: [1.8, 3.0], anim: st => animPeke(r, st) };
+}
+
 const SKINS = [
   { id: 'human', name: 'Людина', note: 'Жовта куртка, джинси, тривожний рюкзак', need: 0, build: () => buildHuman({ jacket: HM.jacket, pants: HM.jeans, shoe: HM.shoe, sole: HM.sole, hat: 'cap' }) },
   { id: 'cat', name: 'Котик', note: 'Рудий таббі в жовтому нашийнику', need: 4, build: buildCat },
+  { id: 'runner', name: 'Бігунка', note: 'Спортивна форма й хвостик', bolts: 2, build: () => buildHuman({ jacket: HM.sport, pants: HM.leggings, shoe: HM.sneaker, sole: HM.sole, hat: 'none', hair: 'ponytail', hairMat: HM.blonde, pack: false, torsoX: 1.1 }) },
   { id: 'peke', name: 'Пекінес', note: 'Довга шерсть і пласка мордочка', need: 9, build: buildPeke },
+  { id: 'dog', name: 'Вівчарка', note: 'Службова собака в жовтому нашийнику', bolts: 5, build: buildDog },
   { id: 'eng', name: 'Інженер', note: 'Каска, жилет і креслення в руці', need: 15, build: () => buildHuman({ jacket: HM.shirt, pants: HM.work, shoe: HM.boot, sole: HM.boot, hat: 'hardhat', vest: true }) },
+  { id: 'hedgehog', name: 'Їжачок', note: 'Колючий, але дуже прудкий', need: 25, build: buildHedgehog },
 ];
+// блискавка — рівень, пройдений удвічі швидше за норматив (q = час / норматив ≤ 0,5)
+const BOLT_Q = 0.5;
 const archTotal = () => Object.values(saved.best).reduce((a, b) => a + ((b && b.s) | 0), 0);
-const unlocked = sk => archTotal() >= sk.need;
+const boltTotal = () => Object.values(saved.best).reduce((a, b) => a + (b && typeof b.q === 'number' && b.q <= BOLT_Q ? 1 : 0), 0);
+const unlockedAt = (sk, arches, bolts) => arches >= (sk.need || 0) && bolts >= (sk.bolts || 0);
+const unlocked = sk => unlockedAt(sk, archTotal(), boltTotal());
 const archWord = n => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? 'арка' : a >= 2 && a <= 4 && (b < 12 || b > 14) ? 'арки' : 'арок'; };
+const boltWord = n => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? 'блискавка' : a >= 2 && a <= 4 && (b < 12 || b > 14) ? 'блискавки' : 'блискавок'; };
 
 const player = new THREE.Group(), figure = new THREE.Group();
 let cur = null;
@@ -1055,7 +1222,7 @@ function animateFigure(dt, now){
   const running = (G.moving && !G.finished) || (fin > 0.8);
   anim.move += ((running ? 1 : 0) - anim.move)*(1 - Math.exp(-dt*10));
   const still = RM.matches, m = still ? 0 : anim.move;
-  if (!still) anim.phase += dt*Math.PI*2*(cur.cadence[0] + cur.cadence[1]*m);
+  if (!still) anim.phase += dt*Math.PI*2*(cur.cadence[0] + cur.cadence[1]*m)*(now < G.fx.speed ? 1.45 : 1);
   const ht = (now - anim.hopAt)/350;
   cur.anim({
     m, idle: 1 - m, p: anim.phase, t: now/1000, still,
@@ -1110,6 +1277,10 @@ player.add(figure, ring, lamp); scene.add(player);
 const TRAIL_MAX = 12000;
 const trail = new THREE.InstancedMesh(GEO.dot, M.trail, TRAIL_MAX);
 trail.count = 0; trail.frustumCulled = false; scene.add(trail);
+const HINT_MAX = 2400;
+M.hint = new THREE.MeshBasicMaterial({ color: '#D9772B', transparent: true, opacity: 0.9, depthWrite: false, fog: false });
+const hint = new THREE.InstancedMesh(new THREE.CircleGeometry(0.85, 16).rotateX(-Math.PI/2), M.hint, HINT_MAX);
+hint.count = 0; hint.frustumCulled = false; hint.renderOrder = 1; scene.add(hint);
 const dummy = new THREE.Object3D();
 
 /* ---------- Стан ---------- */
@@ -1187,6 +1358,15 @@ function buildScene(){
     levelGroup.add(mesh); G.itemMeshes.set(c, mesh);
   }
 
+  G.buffMeshes = new Map();
+  for (const [c, k] of m.buffs){
+    const p = wpos(c), grp = new THREE.Group(), coin = new THREE.Mesh(GEO.coin, buffMat[k].coin), glow = new THREE.Mesh(GEO.glow, buffMat[k].glow);
+    coin.position.y = 1.9; coin.castShadow = true; glow.position.y = 0.07;
+    grp.add(coin, glow); grp.position.set(p.x, 0, p.z); grp.userData = { coin, phase: R()*6 };
+    levelGroup.add(grp); G.buffMeshes.set(c, grp);
+  }
+  hint.count = 0; hint.instanceMatrix.needsUpdate = true;
+
   const s = wpos(m.start); house.position.set(s.x - 2.3, 0, s.z + 2.3);
   const e = wpos(m.exit); shelter.position.set(e.x, 0, e.z);
   const od = KEYS.find(k => m.open[m.exit] & DIRS[k].b) || 'E';
@@ -1203,7 +1383,8 @@ function initLevel(level){
     level, dark, maze, cell: maze.start, items: new Map(maze.items), total: maze.items.length,
     got: [], hasLight: false, seen: new Uint8Array(maze.n), walked: 0, face: 0,
     moving: false, seg: null, path: [], queued: null, bump: null,
-    started: false, t0: 0, elapsed: 0, pausedAt: 0, finished: false, winAt: 0
+    started: false, t0: 0, elapsed: 0, pausedAt: 0, finished: false, winAt: 0,
+    buffs: new Map(maze.buffs), fx: { speed: 0, compass: 0, time: 0 }, radio: false, mapAll: false, buffsGot: [], hintPath: []
   };
   buildScene(); applyLights(); reveal(maze.start); sizeMini(); renderHud();
   figure.scale.setScalar(cur.scale); ring.visible = true;
@@ -1243,6 +1424,53 @@ function addTrail(a, b){
   }
   trail.instanceMatrix.needsUpdate = true;
 }
+function takeBuff(c){
+  const k = G.buffs.get(c), b = BUFF[k], now = performance.now();
+  G.buffs.delete(c); G.buffsGot.push(k); anim.hopAt = now; buzz(20);
+  const grp = G.buffMeshes.get(c); if (grp) G.pops.push({ mesh: grp, t: 0 });
+  if (b.ms) G.fx[k] = now + b.ms;
+  if (k === 'map'){ G.mapAll = true; G.seen.fill(1); }
+  if (k === 'radio') G.radio = true;
+  if (k === 'compass') updateHint();
+  toast(b.name + ' — ' + b.note, 1800);
+}
+// компас: світні мітки по найкоротшому шляху від гравця до укриття
+const hintDist = { maze: null, d: null };
+function updateHint(){
+  const m = G.maze;
+  if (performance.now() >= G.fx.compass){ hint.count = 0; hint.instanceMatrix.needsUpdate = true; G.hintPath = []; return; }
+  if (hintDist.maze !== m){ hintDist.maze = m; hintDist.d = bfs(m, [m.exit]).d; }
+  const d = hintDist.d, path = [G.cell];
+  let c = G.cell;
+  while (c !== m.exit && path.length < m.n){
+    let nx = -1;
+    for (const k of KEYS){ const D = DIRS[k]; if (m.open[c] & D.b){ const nc = c + D.dx + D.dy*m.cols; if (d[nc] === d[c] - 1){ nx = nc; break; } } }
+    if (nx < 0) break; path.push(nx); c = nx;
+  }
+  G.hintPath = path;
+  let i = 0;
+  for (let j = 1; j < path.length && i < HINT_MAX - 1; j++){
+    const A = wpos(path[j - 1]), B = wpos(path[j]);
+    for (const t of [0.5, 1]){ dummy.position.set(A.x + (B.x - A.x)*t, 0.08, A.z + (B.z - A.z)*t); dummy.rotation.set(0, 0, 0); dummy.scale.setScalar(1); dummy.updateMatrix(); hint.setMatrixAt(i++, dummy.matrix); }
+  }
+  hint.count = i; hint.instanceMatrix.needsUpdate = true;
+}
+let buffSig = '';
+function renderBuffs(now){
+  const parts = [];
+  for (const k of ['speed', 'compass', 'time']) if (now < G.fx[k]) parts.push([k, BUFF[k].name + ' · ' + Math.ceil((G.fx[k] - now)/1000) + ' с']);
+  if (G.mapAll) parts.push(['map', BUFF.map.name]);
+  if (G.radio) parts.push(['radio', BUFF.radio.name]);
+  const sig = parts.map(p => p[1]).join('|');
+  if (sig === buffSig) return;
+  buffSig = sig;
+  const box = $('buffs'); box.textContent = '';
+  for (const [k, label] of parts){
+    const el = document.createElement('span'); el.className = 'buff';
+    const dot = document.createElement('i'); dot.style.background = BUFF[k].color;
+    el.append(dot, document.createTextNode(label)); box.append(el);
+  }
+}
 function arrive(c){
   if (c !== G.cell){ addTrail(G.cell, c); G.walked++; }
   G.cell = c; reveal(c);
@@ -1254,13 +1482,15 @@ function arrive(c){
     buzz(28);
     toast(KIT[k] + (k === 'light' && G.dark ? ' — світла більше' : ' — у валізці') + ' · ' + G.got.length + '/' + G.total, 1600);
   }
+  if (G.buffs.has(c)) takeBuff(c);
+  if (performance.now() < G.fx.compass) updateHint();
   $('bDist').textContent = G.walked*C + ' м';
   if (c === G.maze.exit) win();
 }
 function update(dt, now){
   if (G.bump){ G.bump.t += dt/0.16; if (G.bump.t >= 1) G.bump = null; }
   if (G.moving){
-    G.seg.t += dt*SPEED;
+    G.seg.t += dt*SPEED*(now < G.fx.speed ? 1.6 : 1);
     // до укриття людинка добігає лише до порога, далі заходить сама
     while (G.moving && G.seg.t >= (G.seg.to === G.maze.exit ? 1 - DOOR/C : 1)){
       const over = G.seg.t - 1, reached = G.seg.to;
@@ -1274,7 +1504,10 @@ function update(dt, now){
       }
     }
   }
-  if (G.started && !G.finished && !G.pausedAt) G.elapsed = (now - G.t0)/1000;
+  if (G.started && !G.finished && !G.pausedAt){
+    if (now < G.fx.time) G.t0 = now - G.elapsed*1000;   // секундомір: час стоїть
+    else G.elapsed = (now - G.t0)/1000;
+  }
   const txt = fmt(G.elapsed);
   if (hTime.textContent !== txt) hTime.textContent = txt;
 }
@@ -1369,6 +1602,13 @@ function step(now){
     if (!mesh.parent) continue;
     if (!RM.matches){ mesh.rotation.y += dt*1.1; mesh.position.y = 1.8 + Math.sin(now/520 + mesh.userData.phase)*0.25; }
   }
+  for (const grp of G.buffMeshes.values()){
+    if (!grp.parent || RM.matches) continue;
+    const co = grp.userData.coin; co.rotation.y += dt*2.2; co.position.y = 1.9 + Math.sin(now/480 + grp.userData.phase)*0.3;
+  }
+  if (hint.count && now >= G.fx.compass) updateHint();
+  M.hint.opacity = 0.7 + (RM.matches ? 0.2 : 0.25*Math.sin(now/220));
+  renderBuffs(now);
   for (let i = G.pops.length - 1; i >= 0; i--){
     const p = G.pops[i]; p.t += dt/0.35;
     p.mesh.scale.setScalar(Math.max(0, 1 - p.t)*(1 + p.t*0.6)); p.mesh.position.y += dt*7;
@@ -1439,7 +1679,13 @@ function drawMini(){
   }
   g.stroke();
   g.fillStyle = '#FCDE00';
-  for (const c of G.items.keys()) if (G.seen[c]) g.fillRect((c % m.cols + .3)*s, (((c/m.cols) | 0) + .3)*s, s*.4, s*.4);
+  for (const c of G.items.keys()) if (G.seen[c] || G.radio) g.fillRect((c % m.cols + .3)*s, (((c/m.cols) | 0) + .3)*s, s*.4, s*.4);
+  for (const [c, k] of G.buffs) if (G.seen[c]){ g.fillStyle = BUFF[k].color; g.beginPath(); g.arc((c % m.cols + .5)*s, (((c/m.cols) | 0) + .5)*s, Math.max(1.5, s*0.28), 0, Math.PI*2); g.fill(); }
+  if (G.hintPath.length > 1){
+    g.strokeStyle = '#D9772B'; g.lineWidth = Math.max(1.5, s*0.3); g.lineJoin = 'round'; g.beginPath();
+    G.hintPath.forEach((c, i) => { const x = (c % m.cols + .5)*s, y = (((c/m.cols) | 0) + .5)*s; i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.stroke();
+  }
   const ex = m.exit % m.cols, ey = (m.exit/m.cols) | 0, k = s*0.8/79;
   g.save(); g.translate((ex + .5)*s - 39.5*k, (ey + .5)*s - 30*k); g.scale(k, k); g.fillStyle = '#FCDE00'; g.fill(DOME2D); g.restore();
   const P = playerXZ(), px = (P.x + m.cols*C/2)/C*s, py = (P.z + m.rows*C/2)/C*s;
@@ -1492,19 +1738,20 @@ function win(){
   buzz([30, 60, 40]); keepAwake(false); stopHold();
   hTime.textContent = fmt(G.elapsed);
   const m = G.maze, stars = [true, G.elapsed <= m.par, G.got.length === G.total];
-  const n = stars.filter(Boolean).length, prev = saved.best[G.level], before = archTotal();
-  if (!prev || n > prev.s || (n === prev.s && G.elapsed < prev.t)) saved.best[G.level] = { s: n, t: +G.elapsed.toFixed(1) };
-  const fresh = SKINS.find(sk => sk.need > before && sk.need <= archTotal());
+  const n = stars.filter(Boolean).length, prev = saved.best[G.level], before = archTotal(), boltsBefore = boltTotal();
+  const q = G.elapsed/m.par, bolt = q <= BOLT_Q, better = !prev || n > prev.s || (n === prev.s && G.elapsed < prev.t);
+  saved.best[G.level] = { s: better ? n : prev.s, t: better ? +G.elapsed.toFixed(1) : prev.t, q: +Math.min(prev && typeof prev.q === 'number' ? prev.q : 9, q).toFixed(3) };
+  const fresh = SKINS.find(sk => !unlockedAt(sk, before, boltsBefore) && unlocked(sk));
   $('wUnlock').hidden = !fresh;
   if (fresh){ ensureThumbs(); $('wUnlockImg').src = thumbs[fresh.id]; $('wUnlockName').textContent = fresh.name; }
   saved.max = Math.max(saved.max, G.level + 1);
   store.write(saved);
   $('wRank').hidden = true; submitScore().then(renderWinRank);
-  $('wEyebrow').textContent = 'Рівень ' + pad2(G.level) + (G.dark ? ' · знеструмлення' : '') + ' · пройдено';
-  [...$('wArches').children].forEach((f, i) => f.classList.toggle('on', stars[i]));
-  $('wArches').setAttribute('aria-label', 'Арок: ' + n + ' з 3');
+  $('wEyebrow').textContent = 'Рівень ' + pad2(G.level) + (G.dark ? ' · знеструмлення' : '') + (bolt ? ' · блискавично' : ' · пройдено');
+  [...$('wArches').children].forEach((f, i) => f.classList.toggle('on', i < 3 ? stars[i] : bolt));
+  $('wArches').setAttribute('aria-label', 'Арок: ' + n + ' з 3' + (bolt ? ', блискавка' : ''));
   $('wTime').textContent = fmt(G.elapsed);
-  $('wPar').textContent = 'норматив ' + fmtPar(m.par);
+  $('wPar').textContent = 'норматив ' + fmtPar(m.par) + ' · блискавка ≤ ' + fmtPar(Math.floor(m.par*BOLT_Q));
   $('wDist').textContent = G.walked*C + ' м';
   $('wBest').textContent = 'найкоротший ' + m.dist*C + '\u00a0м';
   $('wKit').textContent = G.got.length + ' / ' + G.total;
@@ -1525,18 +1772,19 @@ let skinReturn = 'intro', thumbsBg = '';
 function ensureThumbs(){ if (thumbsBg !== T.tint + T.muted){ renderThumbs(); thumbsBg = T.tint + T.muted; } }
 function updateSkinBtn(){ $('skinBtn').textContent = 'Персонаж: ' + (SKINS.find(x => x.id === cur.id) || SKINS[0]).name; }
 function renderSkinGrid(){
-  const total = archTotal(), grid = $('skinGrid');
-  $('skEyebrow').textContent = 'Персонаж · у тебе ' + total + ' ' + archWord(total);
+  const total = archTotal(), bolts = boltTotal(), grid = $('skinGrid');
+  $('skEyebrow').textContent = 'Персонаж · ' + total + ' ' + archWord(total) + ' · ' + bolts + ' ' + boltWord(bolts);
   grid.textContent = '';
   for (const sk of SKINS){
-    const open = total >= sk.need, chosen = cur.id === sk.id, b = document.createElement('button');
+    const open = unlockedAt(sk, total, bolts), chosen = cur.id === sk.id, b = document.createElement('button');
     b.type = 'button'; b.className = 'skin' + (open ? '' : ' locked');
     b.setAttribute('aria-pressed', String(chosen));
     if (!open) b.setAttribute('aria-disabled', 'true');
     const img = new Image(); img.src = open ? thumbs[sk.id] : sils[sk.id]; img.alt = open ? sk.name : 'Закритий персонаж';
     const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = sk.name;
     const st = document.createElement('span'); st.className = 'st';
-    st.textContent = !open ? 'Ще ' + (sk.need - total) + ' ' + archWord(sk.need - total) : chosen ? 'Обрано' : sk.note;
+    const lackA = (sk.need || 0) - total, lackB = (sk.bolts || 0) - bolts;
+    st.textContent = !open ? (lackB > 0 ? 'Ще ' + lackB + ' ' + boltWord(lackB) : 'Ще ' + lackA + ' ' + archWord(lackA)) : chosen ? 'Обрано' : sk.note;
     b.append(img, nm, st);
     b.addEventListener('click', () => {
       if (!open){ buzz(12); return; }
@@ -1564,11 +1812,14 @@ const betterRun = (a, b) => !b || a.s > b.s || (a.s === b.s && a.t < b.t);
 function mergeBest(local, remote){
   const out = {};
   for (const src of [local || {}, remote || {}]) for (const [k, v] of Object.entries(src)){
-    if (v && typeof v.s === 'number' && typeof v.t === 'number' && betterRun(v, out[k])) out[k] = { s: v.s, t: v.t };
+    if (!v || typeof v.s !== 'number' || typeof v.t !== 'number') continue;
+    const q = typeof v.q === 'number' ? v.q : 9, prevQ = out[k] ? out[k].q : 9;
+    out[k] = betterRun(v, out[k]) ? { s: v.s, t: v.t, q: Math.min(q, prevQ) } : { ...out[k], q: Math.min(q, prevQ) };
   }
   return out;
 }
 const sumArches = best => Object.values(best).reduce((a, b) => a + ((b && b.s) | 0), 0);
+const sumBolts = best => Object.values(best).reduce((a, b) => a + (b && b.q <= BOLT_Q ? 1 : 0), 0);
 const topLevel = best => Object.keys(best).reduce((a, k) => Math.max(a, +k || 0), 0);
 function ranked(){
   return LB.rows.slice().sort((a, b) => (b.arches - a.arches) || (b.top - a.top) || ((a.updatedAt || '') < (b.updatedAt || '') ? -1 : 1));
@@ -1584,13 +1835,13 @@ async function initBoard(){
   db.collection('scores').onSnapshot(snap => {
     LB.rows = snap.docs.filter(d => d.exists).map(d => {
       const v = d.data() || {}, best = mergeBest(v.best, null);
-      return { id: d.id, best, arches: sumArches(best), top: topLevel(best), skin: v.skin, updatedAt: v.updatedAt };
+      return { id: d.id, best, arches: sumArches(best), bolts: sumBolts(best), top: topLevel(best), skin: v.skin, updatedAt: v.updatedAt };
     });
     // прогрес гравця з іншого пристрою: беремо кращі результати локально (у базу пишемо лише після рівня)
     const own = LB.rows.find(r => r.id === LB.me);
     if (own){
       const merged = mergeBest(saved.best, own.best);
-      if (sumArches(merged) !== archTotal() || topLevel(merged) + 1 > saved.max){
+      if (sumArches(merged) !== archTotal() || sumBolts(merged) !== boltTotal() || topLevel(merged) + 1 > saved.max){
         saved.best = merged; saved.max = Math.max(saved.max, topLevel(merged) + 1); store.write(saved);
       }
     }
@@ -1602,7 +1853,7 @@ async function submitScore(){
   if (!LB.db || !LB.me || LB.refused) return;
   const own = LB.rows.find(r => r.id === LB.me), best = mergeBest(saved.best, own && own.best);
   try {
-    await LB.db.collection('scores').doc(LB.me).set({ arches: sumArches(best), top: topLevel(best), best, skin: cur.id, updatedAt: new Date().toISOString() });
+    await LB.db.collection('scores').doc(LB.me).set({ arches: sumArches(best), bolts: sumBolts(best), top: topLevel(best), best, skin: cur.id, updatedAt: new Date().toISOString() });
   } catch (e){ if (e && e.code === 'invalid_argument') LB.refused = true; }
 }
 async function renderWinRank(){
@@ -1639,7 +1890,7 @@ async function renderBoard(){
     const av = new Image(); av.alt = ''; if (p.avatarUrl) av.src = p.avatarUrl;
     const who = document.createElement('span'); who.className = 'who';
     const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = (p.name || (r.id === LB.me ? 'Ти' : 'Гравець')) + (r.id === LB.me && p.name ? ' (ти)' : '');
-    const sub = document.createElement('span'); sub.className = 'sub'; sub.textContent = ((SKINS.find(s => s.id === r.skin) || SKINS[0]).name) + ' · до рівня ' + r.top;
+    const sub = document.createElement('span'); sub.className = 'sub'; sub.textContent = ((SKINS.find(s => s.id === r.skin) || SKINS[0]).name) + ' · до рівня ' + r.top + (r.bolts ? ' · ' + r.bolts + ' ' + boltWord(r.bolts) : '');
     who.append(nm, sub);
     const ar = document.createElement('span'); ar.className = 'ar'; ar.textContent = r.arches; ar.title = 'Арок';
     li.append(pl, av, who, ar);
