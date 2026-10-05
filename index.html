@@ -217,6 +217,19 @@ h2{font-size:clamp(30px,9vw,40px)}
 .skin[aria-pressed="true"] .st{color:var(--ink)}
 .skin.locked{cursor:default}
 .skin.locked img{opacity:.45}
+.lb{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.lb li{display:grid;grid-template-columns:30px 34px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px}
+.lb li.me{border:2px solid var(--ink);padding:7px 9px}
+.lb li.empty{display:block;color:var(--muted);font-size:14px}
+.lb .pl{font-family:var(--f-display);font-weight:600;font-size:17px;text-align:center;font-variant-numeric:tabular-nums;border-radius:999px;line-height:26px}
+.lb .pl.top{background:var(--accent);color:var(--on-accent)}
+.lb img{width:34px;height:34px;border-radius:50%;background:var(--tint);display:block}
+.lb .who{display:flex;flex-direction:column;gap:2px;min-width:0}
+.lb .nm{font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb .sub{font-family:var(--f-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb .ar{font-family:var(--f-display);font-weight:600;font-size:20px;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:5px}
+.lb .ar::after{content:"";width:16px;height:11px;background:var(--accent);border-radius:8px 8px 1px 1px}
+.rank{margin:0;font-family:var(--f-mono);font-size:11.5px;letter-spacing:.04em;color:var(--ink);background:var(--tint);border-radius:10px;padding:10px 12px}
 .unlock{display:grid;grid-template-columns:60px 1fr auto;gap:12px;align-items:center;border:2px solid var(--accent);border-radius:12px;padding:8px 10px}
 .unlock img{width:60px;height:60px;border-radius:8px;background:var(--tint);display:block}
 .unlock b{display:block;font-family:var(--f-display);font-weight:600;font-size:20px;text-transform:uppercase;letter-spacing:.03em}
@@ -305,6 +318,7 @@ h2{font-size:clamp(30px,9vw,40px)}
         <button class="btn" id="startBtn" disabled>Завантажую…</button>
         <button class="btn ghost" id="fromOneBtn" hidden>З першого рівня</button>
         <button class="btn ghost" id="skinBtn">Персонаж: Людина</button>
+        <button class="btn ghost" id="lbBtn" hidden>Таблиця лідерів</button>
       </div>
       <div class="install" id="installBox" hidden></div>
       <p class="site" id="altLink" hidden></p>
@@ -333,6 +347,7 @@ h2{font-size:clamp(30px,9vw,40px)}
         <div><dt>Шлях</dt><dd id="wDist">0 м</dd><dd class="sub" id="wBest">найкоротший 0 м</dd></div>
         <div><dt>Валізка</dt><dd id="wKit">0 / 0</dd><dd class="sub" id="wKitNames">порожня</dd></div>
       </dl>
+      <p class="rank" id="wRank" hidden></p>
       <figure class="fact">
         <figcaption>Факт від Hobbit House</figcaption>
         <p class="f" id="wFact"></p>
@@ -341,6 +356,7 @@ h2{font-size:clamp(30px,9vw,40px)}
       <div class="actions">
         <button class="btn" id="nextBtn">Наступний рівень</button>
         <button class="btn ghost" id="againBtn">Пройти ще раз</button>
+        <button class="btn ghost" id="wLbBtn" hidden>Таблиця лідерів</button>
       </div>
       <p class="site">Більше про укриття: <a href="https://hobbithouse.com.ua" target="_blank" rel="noopener">hobbithouse.com.ua</a></p>
     </div>
@@ -355,6 +371,19 @@ h2{font-size:clamp(30px,9vw,40px)}
       </div>
       <div class="skins" id="skinGrid"></div>
       <div class="actions"><button class="btn" id="skinsDone">Готово</button></div>
+    </div>
+  </section>
+
+  <section class="sheet" id="board" aria-labelledby="boardTitle" hidden>
+    <div class="card">
+      <div class="head">
+        <p class="eyebrow" id="lbEyebrow">Загальний залік</p>
+        <h2 id="boardTitle">Таблиця лідерів</h2>
+        <p class="model">Вище той, у кого більше арок; при рівних — хто пройшов далі.</p>
+      </div>
+      <ol class="lb" id="lbList"></ol>
+      <p class="model" id="lbNote" hidden></p>
+      <div class="actions"><button class="btn" id="lbDone">Готово</button></div>
     </div>
   </section>
 </div>
@@ -1470,6 +1499,7 @@ function win(){
   if (fresh){ ensureThumbs(); $('wUnlockImg').src = thumbs[fresh.id]; $('wUnlockName').textContent = fresh.name; }
   saved.max = Math.max(saved.max, G.level + 1);
   store.write(saved);
+  $('wRank').hidden = true; submitScore().then(renderWinRank);
   $('wEyebrow').textContent = 'Рівень ' + pad2(G.level) + (G.dark ? ' · знеструмлення' : '') + ' · пройдено';
   [...$('wArches').children].forEach((f, i) => f.classList.toggle('on', stars[i]));
   $('wArches').setAttribute('aria-label', 'Арок: ' + n + ' з 3');
@@ -1526,6 +1556,113 @@ function closeSkins(){
   if (skinReturn === 'win'){ screen = 'win'; $('wUnlock').hidden = true; $('win').hidden = false; fitOrbit(); $('nextBtn').focus({ preventScroll: true }); }
   else openIntro(false);
 }
+/* ---------- Таблиця лідерів: лише в артефакті Claude (спільна база + хто грає); на сайті ховається ---------- */
+// scores/<id гравця> = { arches, top, best: {рівень: {s, t}}, skin, updatedAt }; кожен пише лише свій документ
+const LB = { db: null, user: null, me: null, rows: [], canWrite: null, refused: false, from: 'intro' };
+const playersWord = n => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? 'гравець' : a >= 2 && a <= 4 && (b < 12 || b > 14) ? 'гравці' : 'гравців'; };
+const betterRun = (a, b) => !b || a.s > b.s || (a.s === b.s && a.t < b.t);
+function mergeBest(local, remote){
+  const out = {};
+  for (const src of [local || {}, remote || {}]) for (const [k, v] of Object.entries(src)){
+    if (v && typeof v.s === 'number' && typeof v.t === 'number' && betterRun(v, out[k])) out[k] = { s: v.s, t: v.t };
+  }
+  return out;
+}
+const sumArches = best => Object.values(best).reduce((a, b) => a + ((b && b.s) | 0), 0);
+const topLevel = best => Object.keys(best).reduce((a, k) => Math.max(a, +k || 0), 0);
+function ranked(){
+  return LB.rows.slice().sort((a, b) => (b.arches - a.arches) || (b.top - a.top) || ((a.updatedAt || '') < (b.updatedAt || '') ? -1 : 1));
+}
+async function initBoard(){
+  if (!window.claude || typeof window.claude.use !== 'function') return;
+  const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+  if (!db) return;
+  LB.db = db; LB.user = user;
+  LB.me = user ? await user.id() : null;
+  LB.canWrite = user ? await user.can('data.write') : null;
+  $('lbBtn').hidden = false; $('wLbBtn').hidden = false;
+  db.collection('scores').onSnapshot(snap => {
+    LB.rows = snap.docs.filter(d => d.exists).map(d => {
+      const v = d.data() || {}, best = mergeBest(v.best, null);
+      return { id: d.id, best, arches: sumArches(best), top: topLevel(best), skin: v.skin, updatedAt: v.updatedAt };
+    });
+    // прогрес гравця з іншого пристрою: беремо кращі результати локально (у базу пишемо лише після рівня)
+    const own = LB.rows.find(r => r.id === LB.me);
+    if (own){
+      const merged = mergeBest(saved.best, own.best);
+      if (sumArches(merged) !== archTotal() || topLevel(merged) + 1 > saved.max){
+        saved.best = merged; saved.max = Math.max(saved.max, topLevel(merged) + 1); store.write(saved);
+      }
+    }
+    if (screen === 'board') renderBoard();
+    if (screen === 'win') renderWinRank();
+  }, () => { LB.db = null; $('lbBtn').hidden = true; $('wLbBtn').hidden = true; $('wRank').hidden = true; });
+}
+async function submitScore(){
+  if (!LB.db || !LB.me || LB.refused) return;
+  const own = LB.rows.find(r => r.id === LB.me), best = mergeBest(saved.best, own && own.best);
+  try {
+    await LB.db.collection('scores').doc(LB.me).set({ arches: sumArches(best), top: topLevel(best), best, skin: cur.id, updatedAt: new Date().toISOString() });
+  } catch (e){ if (e && e.code === 'invalid_argument') LB.refused = true; }
+}
+async function renderWinRank(){
+  const el = $('wRank');
+  if (!LB.db || !LB.rows.length){ el.hidden = true; return; }
+  const list = ranked(), pos = list.findIndex(r => r.id === LB.me), lvl = String(G.level);
+  let rec = null;
+  for (const r of LB.rows){ const b = r.best[lvl]; if (b && (!rec || b.t < rec.t)) rec = { id: r.id, t: b.t }; }
+  const parts = [];
+  if (pos >= 0) parts.push('Місце в таблиці: ' + (pos + 1) + ' з ' + list.length);
+  if (rec){
+    const ps = LB.user ? await LB.user.profiles([rec.id]) : {};
+    const who = rec.id === LB.me ? 'твій' : ((ps[rec.id] && ps[rec.id].name) || 'гравця');
+    parts.push('рекорд рівня ' + fmt(rec.t) + (rec.id === LB.me ? ' — твій' : ' — ' + who));
+  }
+  el.textContent = parts.join(' · '); el.hidden = !parts.length;
+}
+async function renderBoard(){
+  const list = ranked(), ul = $('lbList');
+  $('lbEyebrow').textContent = 'Загальний залік · ' + list.length + ' ' + playersWord(list.length);
+  const shown = list.slice(0, 50), mine = list.findIndex(r => r.id === LB.me);
+  if (mine >= 50) shown.push(list[mine]);
+  const ps = LB.user ? await LB.user.profiles(shown.map(r => r.id)) : {};
+  ul.textContent = '';
+  if (!list.length){
+    const li = document.createElement('li'); li.className = 'empty';
+    li.textContent = 'Ще ніхто не пройшов рівень. Пройди перший — і очолиш таблицю.';
+    ul.append(li);
+  }
+  for (const r of shown){
+    const place = list.indexOf(r) + 1, p = ps[r.id] || {};
+    const li = document.createElement('li'); if (r.id === LB.me) li.className = 'me';
+    const pl = document.createElement('span'); pl.className = 'pl' + (place <= 3 ? ' top' : ''); pl.textContent = place;
+    const av = new Image(); av.alt = ''; if (p.avatarUrl) av.src = p.avatarUrl;
+    const who = document.createElement('span'); who.className = 'who';
+    const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = (p.name || (r.id === LB.me ? 'Ти' : 'Гравець')) + (r.id === LB.me && p.name ? ' (ти)' : '');
+    const sub = document.createElement('span'); sub.className = 'sub'; sub.textContent = ((SKINS.find(s => s.id === r.skin) || SKINS[0]).name) + ' · до рівня ' + r.top;
+    who.append(nm, sub);
+    const ar = document.createElement('span'); ar.className = 'ar'; ar.textContent = r.arches; ar.title = 'Арок';
+    li.append(pl, av, who, ar);
+    ul.append(li);
+  }
+  const note = $('lbNote');
+  note.hidden = false;
+  note.textContent = !LB.me ? 'Увійди в Claude, щоб твої результати потрапили в таблицю.'
+    : (LB.canWrite === false || LB.refused) ? 'Таблицю видно, але записати сюди результат можна лише з доступом до редагування — попроси власника гри.'
+    : 'Твій результат оновлюється після кожного пройденого рівня.';
+}
+function openBoard(from){
+  LB.from = from; screen = 'board';
+  $('intro').hidden = true; $('win').hidden = true; $('skins').hidden = true; $('board').hidden = false; fitOrbit();
+  $('board').querySelector('.card').scrollTop = 0;
+  renderBoard(); $('lbDone').focus({ preventScroll: true });
+}
+function closeBoard(){
+  $('board').hidden = true;
+  if (LB.from === 'win'){ screen = 'win'; $('win').hidden = false; fitOrbit(); $('nextBtn').focus({ preventScroll: true }); }
+  else openIntro(false);
+}
+
 function applyPad(){
   $('pad').hidden = !saved.pad; stage.classList.toggle('with-pad', !!saved.pad);
   $('padBtn').setAttribute('aria-pressed', String(!!saved.pad));
@@ -1602,6 +1739,9 @@ $('startBtn').addEventListener('click', () => play(0));
 $('skinBtn').addEventListener('click', () => openSkins('intro'));
 $('wUnlockBtn').addEventListener('click', () => openSkins('win'));
 $('skinsDone').addEventListener('click', closeSkins);
+$('lbBtn').addEventListener('click', () => openBoard('intro'));
+$('wLbBtn').addEventListener('click', () => openBoard('win'));
+$('lbDone').addEventListener('click', closeBoard);
 $('fromOneBtn').addEventListener('click', () => play(1));
 $('nextBtn').addEventListener('click', () => play(G.level + 1));
 $('againBtn').addEventListener('click', () => play(G.level));
@@ -1629,6 +1769,7 @@ function start(data){
     initLevel((data && data.level) || saved.max || 1);
     if (data && data.screen === 'play') play(0); else openIntro(true);
     requestAnimationFrame(frame);
+    initBoard().catch(() => {});
   } catch (e){ fail('Помилка запуску: ' + (e && e.message || e)); }
 }
 window.claude?.hot?.snapshot?.(() => ({ level: G && G.level, screen }));
