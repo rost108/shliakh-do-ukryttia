@@ -223,6 +223,8 @@ h2{font-size:clamp(30px,9vw,40px)}
 .skin[aria-pressed="true"] .st{color:var(--ink)}
 .skin.locked{cursor:default}
 .skin.locked img{opacity:.45}
+.nick{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:14px}
+.nick span{font-weight:600}
 .lb{list-style:none;margin:0;padding:0;display:grid;gap:6px}
 .lb li{display:grid;grid-template-columns:30px 34px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px}
 .lb li.me{border:2px solid var(--ink);padding:7px 9px}
@@ -393,6 +395,7 @@ h2{font-size:clamp(30px,9vw,40px)}
         <h2 id="boardTitle">Таблиця лідерів</h2>
         <p class="model">Вище той, у кого більше арок; при рівних — хто пройшов далі.</p>
       </div>
+      <div class="nick" id="lbNick" hidden><span id="lbNickText"></span><button class="btn ghost small" id="lbNickBtn" type="button">Інше ім’я</button></div>
       <ol class="lb" id="lbList"></ol>
       <p class="model" id="lbNote" hidden></p>
       <div class="actions"><button class="btn" id="lbDone">Готово</button></div>
@@ -1804,9 +1807,9 @@ function closeSkins(){
   if (skinReturn === 'win'){ screen = 'win'; $('wUnlock').hidden = true; $('win').hidden = false; fitOrbit(); $('nextBtn').focus({ preventScroll: true }); }
   else openIntro(false);
 }
-/* ---------- Таблиця лідерів: лише в артефакті Claude (спільна база + хто грає); на сайті ховається ---------- */
-// scores/<id гравця> = { arches, top, best: {рівень: {s, t}}, skin, updatedAt }; кожен пише лише свій документ
-const LB = { db: null, user: null, me: null, rows: [], canWrite: null, refused: false, from: 'intro' };
+/* ---------- Таблиця лідерів: на сайті — своя база (Supabase), в артефакті Claude — його спільна база; без бази ховається ---------- */
+// рядок гравця = { arches, bolts, top, best: {рівень: {s, t, q}}, skin, name?, updatedAt }; кожен пише лише свій
+const LB = { api: null, me: null, rows: [], refused: false, from: 'intro' };
 const playersWord = n => { const a = n % 10, b = n % 100; return a === 1 && b !== 11 ? 'гравець' : a >= 2 && a <= 4 && (b < 12 || b > 14) ? 'гравці' : 'гравців'; };
 const betterRun = (a, b) => !b || a.s > b.s || (a.s === b.s && a.t < b.t);
 function mergeBest(local, remote){
@@ -1821,22 +1824,79 @@ function mergeBest(local, remote){
 const sumArches = best => Object.values(best).reduce((a, b) => a + ((b && b.s) | 0), 0);
 const sumBolts = best => Object.values(best).reduce((a, b) => a + (b && b.q <= BOLT_Q ? 1 : 0), 0);
 const topLevel = best => Object.keys(best).reduce((a, k) => Math.max(a, +k || 0), 0);
+function normRow(id, v){
+  const best = mergeBest(v.best, null);
+  return { id, name: typeof v.name === 'string' ? v.name : '', best, arches: sumArches(best), bolts: sumBolts(best), top: topLevel(best), skin: v.skin, updatedAt: v.updatedAt || v.updated_at || '' };
+}
 function ranked(){
-  return LB.rows.slice().sort((a, b) => (b.arches - a.arches) || (b.top - a.top) || ((a.updatedAt || '') < (b.updatedAt || '') ? -1 : 1));
+  return LB.rows.slice().sort((a, b) => (b.arches - a.arches) || (b.top - a.top) || (a.updatedAt < b.updatedAt ? -1 : 1));
+}
+// ім'я на сайті — з готових слів, без вільного тексту: у таблиці бренду не з'явиться чужий напис
+const NICK_A = ['Спокійний', 'Швидкий', 'Уважний', 'Сміливий', 'Тихий', 'Влучний', 'Невтомний', 'Зібраний', 'Кмітливий', 'Надійний'];
+const NICK_N = ['Їжак', 'Кіт', 'Пекінес', 'Інженер', 'Бігун', 'Мандрівник', 'Сусід', 'Будівничий', 'Лис', 'Вартовий'];
+const newNick = () => NICK_A[Math.floor(Math.random()*NICK_A.length)] + ' ' + NICK_N[Math.floor(Math.random()*NICK_N.length)] + ' ' + (10 + Math.floor(Math.random()*90));
+function myNick(){ if (!saved.nick){ saved.nick = newNick(); store.write(saved); } return saved.nick; }
+const AV_COLORS = ['#2F6F8F', '#2F7D4F', '#B8642A', '#5F6B6E', '#D9772B', '#7A5C3E'];
+function initialsAvatar(name, id){
+  let h = 0; for (const ch of String(id)) h = (h*31 + ch.charCodeAt(0)) >>> 0;
+  const ini = (name || '?').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  return 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 34 34"><circle cx="17" cy="17" r="17" fill="${AV_COLORS[h % AV_COLORS.length]}"/><text x="17" y="22" font-size="13" font-family="sans-serif" font-weight="600" text-anchor="middle" fill="#fff">${ini.replace(/[<&>"]/g, '')}</text></svg>`);
+}
+
+// база в артефакті Claude: гравці — акаунти Claude, імена й аватари з профілів
+async function claudeBackend(){
+  if (!window.claude || typeof window.claude.use !== 'function') return null;
+  const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+  if (!db) return null;
+  const me = user ? await user.id() : null, canWrite = user ? await user.can('data.write') : null;
+  return {
+    kind: 'claude', me, canWrite,
+    subscribe(onRows, onFail){ db.collection('scores').onSnapshot(snap => onRows(snap.docs.filter(d => d.exists).map(d => normRow(d.id, d.data() || {}))), onFail); },
+    async submit(doc){ if (me) await db.collection('scores').doc(me).set(doc); },
+    people: ids => user ? user.profiles(ids) : Promise.resolve({}),
+  };
+}
+// база на сайті (Supabase): гравець отримує анонімний id при першому записі, читати таблицю може кожен
+async function siteBackend(){
+  const cfg = window.HH_SUPABASE;
+  if (!cfg || !cfg.url || !cfg.key) return null;
+  for (let i = 0; i < 50 && !(window.supabase && window.supabase.createClient); i++) await new Promise(r => setTimeout(r, 100));
+  if (!(window.supabase && window.supabase.createClient)) return null;
+  const sb = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'hh-shelter-auth' } });
+  const sess = await sb.auth.getSession().catch(() => null);
+  const api = {
+    kind: 'site', me: sess && sess.data && sess.data.session ? sess.data.session.user.id : null, canWrite: true,
+    subscribe(onRows, onFail){
+      api.reload = async () => {
+        const { data, error } = await sb.from('scores').select('id,name,best,skin,updated_at').order('arches', { ascending: false }).limit(500);
+        if (error){ if (onFail) onFail(error); return; }
+        onRows((data || []).map(v => normRow(v.id, v)));
+      };
+      api.reload();
+      try { sb.channel('scores-live').on('postgres_changes', { event: '*', schema: 'public', table: 'scores' }, () => api.reload()).subscribe(); } catch (_) {}
+      setInterval(() => { if (screen === 'board' && !document.hidden) api.reload(); }, 30000);
+    },
+    async submit(doc){
+      if (!api.me){
+        const r = await sb.auth.signInAnonymously();
+        if (r.error) throw r.error;
+        api.me = LB.me = r.data.user.id;
+      }
+      const { error } = await sb.from('scores').upsert({ id: api.me, name: myNick(), arches: doc.arches, bolts: doc.bolts, top: doc.top, best: doc.best, skin: doc.skin, updated_at: doc.updatedAt });
+      if (error) throw error;
+      if (api.reload) await api.reload();
+    },
+    people: async ids => Object.fromEntries(ids.map(id => { const r = LB.rows.find(x => x.id === id), nm = (r && r.name) || ''; return [id, { name: nm, avatarUrl: initialsAvatar(nm, id) }]; })),
+  };
+  return api;
 }
 async function initBoard(){
-  if (!window.claude || typeof window.claude.use !== 'function') return;
-  const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
-  if (!db) return;
-  LB.db = db; LB.user = user;
-  LB.me = user ? await user.id() : null;
-  LB.canWrite = user ? await user.can('data.write') : null;
+  const api = (await siteBackend().catch(() => null)) || (await claudeBackend().catch(() => null));
+  if (!api) return;
+  LB.api = api; LB.me = api.me;
   $('lbBtn').hidden = false; $('wLbBtn').hidden = false;
-  db.collection('scores').onSnapshot(snap => {
-    LB.rows = snap.docs.filter(d => d.exists).map(d => {
-      const v = d.data() || {}, best = mergeBest(v.best, null);
-      return { id: d.id, best, arches: sumArches(best), bolts: sumBolts(best), top: topLevel(best), skin: v.skin, updatedAt: v.updatedAt };
-    });
+  api.subscribe(rows => {
+    LB.rows = rows;
     // прогрес гравця з іншого пристрою: беремо кращі результати локально (у базу пишемо лише після рівня)
     const own = LB.rows.find(r => r.id === LB.me);
     if (own){
@@ -1847,27 +1907,29 @@ async function initBoard(){
     }
     if (screen === 'board') renderBoard();
     if (screen === 'win') renderWinRank();
-  }, () => { LB.db = null; $('lbBtn').hidden = true; $('wLbBtn').hidden = true; $('wRank').hidden = true; });
+  }, () => { if (api.kind === 'claude'){ LB.api = null; $('lbBtn').hidden = true; $('wLbBtn').hidden = true; $('wRank').hidden = true; } });
 }
 async function submitScore(){
-  if (!LB.db || !LB.me || LB.refused) return;
+  if (!LB.api || LB.refused || (LB.api.kind === 'claude' && !LB.me)) return;
   const own = LB.rows.find(r => r.id === LB.me), best = mergeBest(saved.best, own && own.best);
   try {
-    await LB.db.collection('scores').doc(LB.me).set({ arches: sumArches(best), bolts: sumBolts(best), top: topLevel(best), best, skin: cur.id, updatedAt: new Date().toISOString() });
-  } catch (e){ if (e && e.code === 'invalid_argument') LB.refused = true; }
+    await LB.api.submit({ arches: sumArches(best), bolts: sumBolts(best), top: topLevel(best), best, skin: cur.id, updatedAt: new Date().toISOString() });
+  } catch (e){
+    // відмова правил бази — назавжди для цього візиту; збій мережі — спробуємо після наступного рівня
+    if (e && !(e instanceof TypeError) && e.code && e.code !== 'unavailable') LB.refused = true;
+  }
 }
 async function renderWinRank(){
   const el = $('wRank');
-  if (!LB.db || !LB.rows.length){ el.hidden = true; return; }
+  if (!LB.api || !LB.rows.length){ el.hidden = true; return; }
   const list = ranked(), pos = list.findIndex(r => r.id === LB.me), lvl = String(G.level);
   let rec = null;
   for (const r of LB.rows){ const b = r.best[lvl]; if (b && (!rec || b.t < rec.t)) rec = { id: r.id, t: b.t }; }
   const parts = [];
   if (pos >= 0) parts.push('Місце в таблиці: ' + (pos + 1) + ' з ' + list.length);
   if (rec){
-    const ps = LB.user ? await LB.user.profiles([rec.id]) : {};
-    const who = rec.id === LB.me ? 'твій' : ((ps[rec.id] && ps[rec.id].name) || 'гравця');
-    parts.push('рекорд рівня ' + fmt(rec.t) + (rec.id === LB.me ? ' — твій' : ' — ' + who));
+    const ps = await LB.api.people([rec.id]);
+    parts.push('рекорд рівня ' + fmt(rec.t) + ' — ' + (rec.id === LB.me ? 'твій' : ((ps[rec.id] && ps[rec.id].name) || 'гравця')));
   }
   el.textContent = parts.join(' · '); el.hidden = !parts.length;
 }
@@ -1876,7 +1938,7 @@ async function renderBoard(){
   $('lbEyebrow').textContent = 'Загальний залік · ' + list.length + ' ' + playersWord(list.length);
   const shown = list.slice(0, 50), mine = list.findIndex(r => r.id === LB.me);
   if (mine >= 50) shown.push(list[mine]);
-  const ps = LB.user ? await LB.user.profiles(shown.map(r => r.id)) : {};
+  const ps = await LB.api.people(shown.map(r => r.id));
   ul.textContent = '';
   if (!list.length){
     const li = document.createElement('li'); li.className = 'empty';
@@ -1887,7 +1949,7 @@ async function renderBoard(){
     const place = list.indexOf(r) + 1, p = ps[r.id] || {};
     const li = document.createElement('li'); if (r.id === LB.me) li.className = 'me';
     const pl = document.createElement('span'); pl.className = 'pl' + (place <= 3 ? ' top' : ''); pl.textContent = place;
-    const av = new Image(); av.alt = ''; if (p.avatarUrl) av.src = p.avatarUrl;
+    const av = new Image(); av.alt = ''; av.src = p.avatarUrl || initialsAvatar(p.name, r.id);
     const who = document.createElement('span'); who.className = 'who';
     const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = (p.name || (r.id === LB.me ? 'Ти' : 'Гравець')) + (r.id === LB.me && p.name ? ' (ти)' : '');
     const sub = document.createElement('span'); sub.className = 'sub'; sub.textContent = ((SKINS.find(s => s.id === r.skin) || SKINS[0]).name) + ' · до рівня ' + r.top + (r.bolts ? ' · ' + r.bolts + ' ' + boltWord(r.bolts) : '');
@@ -1896,10 +1958,14 @@ async function renderBoard(){
     li.append(pl, av, who, ar);
     ul.append(li);
   }
-  const note = $('lbNote');
+  const site = LB.api.kind === 'site', note = $('lbNote');
+  $('lbNick').hidden = !site;
+  if (site) $('lbNickText').textContent = 'Твоє ім’я в таблиці: ' + myNick();
   note.hidden = false;
-  note.textContent = !LB.me ? 'Увійди в Claude, щоб твої результати потрапили в таблицю.'
-    : (LB.canWrite === false || LB.refused) ? 'Таблицю видно, але записати сюди результат можна лише з доступом до редагування — попроси власника гри.'
+  note.textContent = LB.refused ? 'Записати результат зараз не вдалося — спробуємо після наступного рівня.'
+    : site ? (LB.me ? 'Твій результат оновлюється після кожного пройденого рівня.' : 'Пройди рівень — і з’явишся в таблиці під цим ім’ям.')
+    : !LB.me ? 'Увійди в Claude, щоб твої результати потрапили в таблицю.'
+    : LB.api.canWrite === false ? 'Таблицю видно, але записати сюди результат можна лише з доступом до редагування — попроси власника гри.'
     : 'Твій результат оновлюється після кожного пройденого рівня.';
 }
 function openBoard(from){
@@ -1993,6 +2059,7 @@ $('skinsDone').addEventListener('click', closeSkins);
 $('lbBtn').addEventListener('click', () => openBoard('intro'));
 $('wLbBtn').addEventListener('click', () => openBoard('win'));
 $('lbDone').addEventListener('click', closeBoard);
+$('lbNickBtn').addEventListener('click', () => { saved.nick = newNick(); store.write(saved); renderBoard(); if (LB.me) submitScore(); });
 $('fromOneBtn').addEventListener('click', () => play(1));
 $('nextBtn').addEventListener('click', () => play(G.level + 1));
 $('againBtn').addEventListener('click', () => play(G.level));
