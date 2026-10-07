@@ -20,6 +20,7 @@
 /* поза артефактом відступи під виріз і жести робить сама сторінка */
 html{background:var(--bg);overscroll-behavior:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
 </style>
+<script>/* скрипт Telegram — лише коли гру відкрито як Mini App (Telegram передає tgWebApp… у #) */ if (/tgWebApp/.test(location.hash) || window.TelegramWebviewProxy) document.write('<script src="https://telegram.org/js/telegram-web-app.js"><\/script>');</script>
 <script>window.HH_ALT = {"href": "2d.html", "text": "Легка 2D-версія для слабких телефонів"};</script>
 <script>
 (() => {
@@ -30,7 +31,7 @@ html{background:var(--bg);overscroll-behavior:none;padding:env(safe-area-inset-t
   let deferred = null;
   function render(done){
     const box = document.getElementById('installBox'); if (!box) return;
-    if (standalone){ box.hidden = true; return; }
+    if (standalone || (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData)){ box.hidden = true; return; }   // у Telegram установлення не потрібне
     if (done) box.innerHTML = '<p><b>Встановлено.</b> Гра тепер серед застосунків і працює без інтернету.</p>';
     else if (deferred){
       box.innerHTML = '<button class="btn ghost" id="installBtn" type="button">Встановити застосунок</button><p>Іконка з’явиться серед застосунків телефона; після першого запуску гра працює без інтернету.</p>';
@@ -1611,7 +1612,7 @@ function step(now){
   }
   if (hint.count && now >= G.fx.compass) updateHint();
   M.hint.opacity = 0.7 + (RM.matches ? 0.2 : 0.25*Math.sin(now/220));
-  renderBuffs(now);
+  renderBuffs(now); syncTgBack();
   for (let i = G.pops.length - 1; i >= 0; i--){
     const p = G.pops[i]; p.t += dt/0.35;
     p.mesh.scale.setScalar(Math.max(0, 1 - p.t)*(1 + p.t*0.6)); p.mesh.position.y += dt*7;
@@ -1624,7 +1625,28 @@ function step(now){
 }
 
 /* ---------- Телефон: вібро, екран не гасне, якість під пристрій ---------- */
-function buzz(p){ try { if (navigator.vibrate) navigator.vibrate(p); } catch(_){} }
+/* ---------- Telegram Mini App: тема Telegram, без закриття свайпом, кнопка «Назад», вібро через Telegram ---------- */
+const TG = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData ? window.Telegram.WebApp : null;
+let tgBack = false;
+if (TG){
+  try { TG.ready(); TG.expand(); } catch(_){}
+  try { if (TG.isVersionAtLeast('7.7')) TG.disableVerticalSwipes(); } catch(_){}   // свайп униз у лабіринті не закриває гру
+  try { if (TG.colorScheme) document.documentElement.setAttribute('data-theme', TG.colorScheme); } catch(_){}
+  try { TG.BackButton.onClick(() => { if (screen === 'skins') closeSkins(); else if (screen === 'board') closeBoard(); else if (screen === 'play') openIntro(false); }); } catch(_){}
+}
+function syncTgBack(){
+  if (!TG) return;
+  const want = screen === 'play' || screen === 'skins' || screen === 'board';
+  if (want !== tgBack){ tgBack = want; try { want ? TG.BackButton.show() : TG.BackButton.hide(); } catch(_){} }
+}
+function buzz(p){
+  try {
+    if (TG && TG.HapticFeedback){
+      if (Array.isArray(p)) TG.HapticFeedback.notificationOccurred('success');
+      else TG.HapticFeedback.impactOccurred(p < 15 ? 'light' : p < 25 ? 'medium' : 'heavy');
+    } else if (navigator.vibrate) navigator.vibrate(p);
+  } catch(_){}
+}
 let wake = null;
 async function keepAwake(on){
   try {

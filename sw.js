@@ -1,5 +1,5 @@
 // Шлях до укриття — офлайн-кеш застосунку. Версія змінюється з кожною збіркою.
-const VERSION = 'hh-ea24b985f6';
+const VERSION = 'hh-8b53be9804';
 const SHELL = ['./', 'index.html', '2d.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png'];
 const EXTERNAL = ["https://cdnjs.cloudflare.com/ajax/libs/three.js/0.159.0/three.min.js"];   // 3D-рушій з cdnjs
 const FONT_CSS = ["https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap"];      // шрифти Google: CSS + файли, щоб перший же офлайн-запуск мав усе

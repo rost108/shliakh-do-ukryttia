@@ -20,6 +20,7 @@
 /* поза артефактом відступи під виріз і жести робить сама сторінка */
 html{background:var(--bg);overscroll-behavior:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
 </style>
+<script>/* скрипт Telegram — лише коли гру відкрито як Mini App (Telegram передає tgWebApp… у #) */ if (/tgWebApp/.test(location.hash) || window.TelegramWebviewProxy) document.write('<script src="https://telegram.org/js/telegram-web-app.js"><\/script>');</script>
 <script>window.HH_ALT = {"href": "./", "text": "3D-версія гри"};</script>
 <script>
 (() => {
@@ -30,7 +31,7 @@ html{background:var(--bg);overscroll-behavior:none;padding:env(safe-area-inset-t
   let deferred = null;
   function render(done){
     const box = document.getElementById('installBox'); if (!box) return;
-    if (standalone){ box.hidden = true; return; }
+    if (standalone || (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData)){ box.hidden = true; return; }   // у Telegram установлення не потрібне
     if (done) box.innerHTML = '<p><b>Встановлено.</b> Гра тепер серед застосунків і працює без інтернету.</p>';
     else if (deferred){
       box.innerHTML = '<button class="btn ghost" id="installBtn" type="button">Встановити застосунок</button><p>Іконка з’явиться серед застосунків телефона; після першого запуску гра працює без інтернету.</p>';
