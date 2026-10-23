@@ -1,5 +1,5 @@
 // Шлях до укриття — офлайн-кеш застосунку. Версія змінюється з кожною збіркою.
-const VERSION = 'hh-fe96b4b539';
+const VERSION = 'hh-03799050f0';
 const SHELL = ['./', 'index.html', '2d.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'three-gltf-loader.js'];
 // моделі персонажів (models/*.glb) не передкешуються: гра бере їх, коли потрібні, далі вони лежать у кеші
 const EXTERNAL = ["https://cdnjs.cloudflare.com/ajax/libs/three.js/0.159.0/three.min.js"];   // 3D-рушій з cdnjs
@@ -32,7 +32,9 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
-  if (/\.supabase\.co$/.test(new URL(req.url).hostname)) return;   // таблиця лідерів — завжди свіжа, з мережі
+  const host = new URL(req.url).hostname;
+  if (/\.supabase\.co$/.test(host)) return;   // таблиця лідерів — завжди свіжа, з мережі
+  if (/(^|\.)(google-analytics|googletagmanager)\.com$/.test(host)) return;   // аналітика — лише з мережі, без кешу
   if (req.mode === 'navigate'){            // сторінки: спершу мережа (свіжа версія), без мережі — кеш
     e.respondWith((async () => {
       try {

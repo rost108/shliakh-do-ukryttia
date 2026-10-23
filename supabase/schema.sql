@@ -8,14 +8,19 @@ create table if not exists public.scores (
   bolts       int  not null default 0,
   top         int  not null default 0,
   best        jsonb not null default '{}'::jsonb,                            -- {рівень: {s, t, q}}
+  daily       jsonb not null default '{}'::jsonb,                            -- лабіринт дня: {дата: {s, t}}, останній тиждень
   skin        text not null default 'human' check (char_length(skin) <= 16),
   updated_at  timestamptz not null default now(),
   -- межі здорового глузду: не більше 3 арок і 1 блискавки на рівень, не більше 1000 рівнів
   check (top between 0 and 1000),
   check (arches between 0 and top * 3),
   check (bolts between 0 and top),
-  check (pg_column_size(best) < 60000)
+  check (pg_column_size(best) < 60000),
+  check (pg_column_size(daily) < 4000)
 );
+
+-- для бази, створеної старішою версією цього файлу
+alter table public.scores add column if not exists daily jsonb not null default '{}'::jsonb;
 
 alter table public.scores enable row level security;
 

@@ -12,7 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="Шлях до укриття">
 <meta property="og:title" content="Шлях до укриття — Hobbit House">
 <meta property="og:description" content="Гра-тренування Hobbit House: пройди кварталами від дому до укриття, збери тривожну валізку і вкладися в норматив.">
-<meta property="og:image" content="icon-512.png">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://rost108.github.io/shliakh-do-ukryttia/">
+<meta property="og:image" content="https://rost108.github.io/shliakh-do-ukryttia/promo-1280x720.jpg">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -22,6 +27,15 @@ html{background:var(--bg);overscroll-behavior:none;padding:env(safe-area-inset-t
 </style>
 <script>/* скрипт Telegram — лише коли гру відкрито як Mini App (Telegram передає tgWebApp… у #) */ if (/tgWebApp/.test(location.hash) || window.TelegramWebviewProxy) document.write('<script src="https://telegram.org/js/telegram-web-app.js"><\/script>');</script>
 <script>window.HH_ALT = {"href": "./", "text": "3D-версія гри"};</script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1KEL058FKP"></script>
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('set', 'user_properties', { game_platform: (/tgWebApp/.test(location.hash) || window.TelegramWebviewProxy) ? 'telegram' : (matchMedia('(display-mode: standalone)').matches || navigator.standalone) ? 'pwa' : 'web' });
+// лише вимірювання: без рекламних сигналів (до потоку сайту підв'язана Google Ads)
+gtag('config', 'G-1KEL058FKP', { page_location: location.origin + location.pathname, page_title: document.title, content_group: 'shliakh_game', allow_google_signals: false, allow_ad_personalization_signals: false });
+</script>
 <script>
 (() => {
   if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
@@ -42,7 +56,7 @@ html{background:var(--bg);overscroll-behavior:none;padding:env(safe-area-inset-t
     box.hidden = false;
   }
   addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; render(); });
-  addEventListener('appinstalled', () => { deferred = null; render(true); });
+  addEventListener('appinstalled', () => { deferred = null; render(true); try { window.gtag && gtag('event', 'app_install'); } catch(_){} });
   document.addEventListener('DOMContentLoaded', () => render());
 })();
 </script>
